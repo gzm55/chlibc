@@ -6,7 +6,7 @@
 
 #ifndef __x86_64__
 #error "handle_exec now requires an x86_64 (x64) architecture. Compilation aborted."
-// the registers, stack layout, and some ptrace() behaivor is based on x64 Linux >= 2.6.18
+// the registers, stack layout, and some ptrace() behavior is based on x64 Linux >= 2.6.18
 // and should be able to adopted to aarch64 Linux >= 3.19 in the future
 #endif
 
@@ -433,7 +433,7 @@ static void setup_sentinel_if_need_or_die() {
   _OK_CALL(sigaction(SIGXCPU, &sa, nullptr), _ == 0, _Exit(64));
   _OK_CALL(sigaction(SIGSYS, &sa, nullptr), _ == 0, _Exit(64));
 
-  // resotre signal masks
+  // restore signal masks
   _OK_CALL(sigprocmask(SIG_SETMASK, &sig_mask_init, nullptr), 0 == _, _Exit(65));
 
   while (true) {
@@ -509,7 +509,7 @@ static void setup_signal_handlers_or_die() {
   for (int rt = SIGRTMIN; rt <= SIGRTMAX; ++rt)
     _OK_CALL(signal(rt, SIG_IGN), _ != SIG_ERR, _Exit(128 + rt));
 
-  // resotre signal masks
+  // restore signal masks
   _OK_CALL(sigprocmask(SIG_SETMASK, &sig_mask_init, nullptr), _ == 0, _Exit(66));
 }
 
@@ -1112,7 +1112,7 @@ static inline pt_result_t pt_write_word(const pid_t pid, const uintptr_t remote_
 
 // assume dst_sz and src_sz are multiple of (batch_word_nr * sizeof(uint64_t))
 // in expr "until_first_word_", variable "_" is the 1st word of the batch
-// when success, return the readed/written size in bytes, not include the 1st word matchs "until_first_word_" when read
+// when success, return the readed/written size in bytes, not include the 1st word matches "until_first_word_" when read
 #define PT_READ_BULKS(pid, remote_addr, batch_word_nr, dst, dst_sz, ok_1st_word_, until_1st_word_, err_full, ...)      \
   __extension__({                                                                                                      \
     static_assert(batch_word_nr > 0);                                                                                  \
@@ -1863,13 +1863,13 @@ static void process(const pid_t pid, const int status, const int exitsig) {
             SIGSTOP == stopsig && (SI_USER == si.si_code || SI_KERNEL == si.si_code) && 0 == si.si_pid;
         if (first_stop) {
           deliver_sig = 0;
-          DEBUG(pid, status >> 16, stopsig, "Attatched SIGSTOP");
+          DEBUG(pid, status >> 16, stopsig, "Attached SIGSTOP");
         } else
           DEBUG(pid, status >> 16, stopsig, "Stop Signals");
       } else if (PT_IS_GROUP_STOP(stopsig, PT_ERRNO(r))) {
         DEBUG(pid, status >> 16, stopsig, "Group-stop Signals");
         ptrace_has_group_stopped = true;
-        return; // in PTRACE_ATTATCH mode, leave the tracees stopped
+        return; // in PTRACE_ATTACH mode, leave the tracees stopped
       }
     } break;
 

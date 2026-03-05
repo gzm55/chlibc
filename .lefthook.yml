@@ -1,0 +1,58 @@
+lefthook: ./pixiw run --no-progress lefthook
+# use 'jobs' config
+min_version: 1.10.0
+templates:
+  run: run --quiet --no-progress
+colors: true
+output:
+  - meta # print lefthook version
+  - summary # print summary block (successful and failed steps)
+  - empty_summary # print summary heading when there are no steps to run
+  # - success # print successful steps
+  # - failure # print failed steps printing
+  # - execution # print any execution logs
+  # - execution_out  # print execution output
+  # - execution_info # print `execute > ...` logging
+  - skips # print "skip" (i.e. no files matched)
+# lint (w/ formatting on-the-fly or post-lint) on pre-commit git hook
+pre-commit:
+  parallel: true
+  fail_on_changes: ci
+  jobs:
+    - name: Fix EOF
+      run: end-of-file-fixer {staged_files}
+      file_types: [text]
+      stage_fixed: true
+    - name: Fix trailing-whitespace
+      run: trailing-whitespace-fixer {staged_files}
+      file_types: [text]
+      exclude: ["*.patch"]
+      stage_fixed: true
+    - name: Fix utf-8 BOM
+      run: fix-byte-order-marker {staged_files}
+      file_types: [text]
+      stage_fixed: true
+    - name: Check spell typos
+      tags: [lint]
+      run: typos {staged_files}
+      file_types: [text]
+      stage_fixed: false # need manually confirm
+    - name: For toml files
+      glob: "*.toml"
+      group:
+        piped: true
+        jobs:
+          - name: Lint toml
+            tags: [lint]
+            env:
+              RUST_LOG: warn
+            run: taplo lint {staged_files}
+          - name: Format toml
+            env:
+              RUST_LOG: warn
+            run: taplo fmt {staged_files}
+            stage_fixed: true
+    - name: Format yaml
+      glob: "*.{yml,yaml}"
+      run: yamlfmt {staged_files}
+      stage_fixed: true

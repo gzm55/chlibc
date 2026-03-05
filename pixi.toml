@@ -14,10 +14,10 @@ libc = { family = "glibc", version = "2.17" }
 cmake = ">=4"
 ninja = "*"
 [feature.common.tasks]
-configure-arch = "cmake --preset \"$C_ARCH\" -S ."
-build-arch = [{task="build-arch-debug"},{task="build-arch-release"}]
-build-arch-debug = "./cmake-build --preset \"$C_ARCH\"-debug"
-build-arch-release = "./cmake-build --preset \"$C_ARCH\"-release"
+_configure-arch = "cmake --preset \"$C_ARCH\" -S ."
+_build-arch = [{ task = "build-arch-debug" }, { task = "build-arch-release" }]
+_build-arch-debug = "./cmake-build --preset \"$C_ARCH\"-debug"
+_build-arch-release = "./cmake-build --preset \"$C_ARCH\"-release"
 
 # cross toolchain for x86_64
 [feature.x86_64.dependencies]
@@ -42,8 +42,28 @@ no-default-feature = true
 solve-group = "aarch64"
 
 [tasks]
-configure = [{task="configure-arch", environment="x86-64"},{task="configure-arch", environment="aarch64"}]
+configure = [
+  { task = "_configure-arch", environment = "x86-64" },
+  { task = "_configure-arch", environment = "aarch64" },
+]
 
-build = [{task="build-x86_64"},{task="build-aarch64"}]
-build-x86_64 = [{task="build-arch-debug", environment="x86-64"},{task="build-arch-release", environment="x86-64"}]
-build-aarch64 = [{task="build-arch-debug", environment="aarch64"},{task="build-arch-release", environment="aarch64"}]
+build = [{ task = "build-x86_64" }, { task = "build-aarch64" }]
+build-x86_64 = [
+  { task = "_build-arch-debug", environment = "x86-64" },
+  { task = "_build-arch-release", environment = "x86-64" },
+]
+build-aarch64 = [
+  { task = "_build-arch-debug", environment = "aarch64" },
+  { task = "_build-arch-release", environment = "aarch64" },
+]
+
+pre-commit-install = "lefthook install"
+lint = "lefthook run pre-commit --all-files --no-stage-fixed"
+fmt = { cmd = "", depends-on = ["lint"], env = { LEFTHOOK_EXCLUDE = "lint" } }
+
+[dependencies]
+lefthook = ">=1.13.1"
+pre-commit-hooks = "*"
+typos = "*"
+taplo = "*"            # lint&format toml
+yamlfmt = "*"
