@@ -1,0 +1,43 @@
+---
+# Common options
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentWidth: 2
+LineEnding: LF
+
+#inherit from base
+#MaxEmptyLinesToKeep
+#ReflowComments
+#SpacesInLineCommentPrefix.Maximum
+#SpacesInLineCommentPrefix.Minimum
+#TabWidth
+#UseTab
+---
+Language: C
+# C options
+
+Standard: Latest
+AccessModifierOffset: -2
+IncludeBlocks: Preserve
+PointerAlignment: Right
+#cpp options detected from code
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlignAfterOpenBracket: Align
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+IndentCaseLabels: false
+
+#inherit from base
+#AlignEscapedNewlines
+#AllowAllArgumentsOnNextLine
+#AllowShortFunctionsOnASingleLine
+#AllowShortLambdasOnASingleLine
+#ExperimentalAutoDetectBinPacking
+#FixNamespaceComments
+#IndentAccessModifiers
+#InsertBraces
+#KeepEmptyLines.AtStartOfBlock
+#SkipMacroDefinitionBody
+#SortIncludes
+#SortUsingDeclarations

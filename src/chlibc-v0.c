@@ -2,7 +2,7 @@
 //     ./interp --library-path ... ./main/elf
 // which does not supports copy relocation and IFUNC
 
-#define _GNU_SOURCE // REG_RIP macro needs GNU source
+#define _GNU_SOURCE  // REG_RIP macro needs GNU source
 
 #ifndef __x86_64__
 #error "handle_exec now requires an x86_64 (x64) architecture. Compilation aborted."
@@ -10,13 +10,12 @@
 // and should be able to adopted to aarch64 Linux >= 3.19 in the future
 #endif
 
-#include <sys/wait.h>
-
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
+#include <linux/binfmts.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -27,22 +26,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
-#include <termios.h>
-#include <time.h>
-#include <ucontext.h>
-#include <unistd.h>
-
-#include <linux/binfmts.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <sys/ptrace.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-
-#include <sys/ptrace.h>
+#include <syslog.h>
+#include <termios.h>
+#include <time.h>
+#include <ucontext.h>
+#include <unistd.h>
 #ifndef PTRACE_O_EXITKILL
 #include <linux/ptrace.h>
 #endif
@@ -130,8 +126,8 @@ static void _log_writev(struct iovec *iov, int iovcnt) {
     while (0 < iovcnt) {
       auto written = writev(fd, iov, iovcnt);
       if (-1 == written) {
-        if (errno == EINTR) // treat buffer full (EAGAIN or EWOULDBLOCK), etc. as errors
-          continue;         // only continue on signals, which are handled after writing
+        if (errno == EINTR)  // treat buffer full (EAGAIN or EWOULDBLOCK), etc. as errors
+          continue;          // only continue on signals, which are handled after writing
         write(fd, "\n", 1);
         _log_write_syslogv(fallback_v, fallback_n);
         ++fail_cnt;
@@ -148,7 +144,7 @@ static void _log_writev(struct iovec *iov, int iovcnt) {
       }
     }
   } else if (isatty(fd))
-    tcflush(fd, TCOFLUSH); // flush tty
+    tcflush(fd, TCOFLUSH);  // flush tty
   else {
     struct stat st;
     if (fstat(fd, &st) >= 0 && S_ISREG(st.st_mode))
@@ -176,33 +172,33 @@ static void _log_error(char *const file, const int flen, char *const fmt, ...) {
   errno = old_errno;
 }
 #define ERR(fmt, ...) _log_error(__FILE__, strlen(__FILE__), ":%d " fmt, __LINE__ __VA_OPT__(, ) __VA_ARGS__)
-#define FATAL(err, ...)                                                                                                \
-  do {                                                                                                                 \
-    ERR(__VA_ARGS__);                                                                                                  \
-    _log_writev(nullptr, 0);                                                                                           \
-    _Exit(err);                                                                                                        \
+#define FATAL(err, ...)      \
+  do {                       \
+    ERR(__VA_ARGS__);        \
+    _log_writev(nullptr, 0); \
+    _Exit(err);              \
   } while (0)
 
 #ifdef ENABLE_DEBUG_LOG
-#define DEBUG(pid, event, sig, msg)                                                                                    \
-  do {                                                                                                                 \
-    errno = 0;                                                                                                         \
-    _log_error(__FILE__, strlen(__FILE__), ":%d [c=%d][ev=%d][sig=%d] %s", __LINE__, pid, event, sig, msg);            \
+#define DEBUG(pid, event, sig, msg)                                                                         \
+  do {                                                                                                      \
+    errno = 0;                                                                                              \
+    _log_error(__FILE__, strlen(__FILE__), ":%d [c=%d][ev=%d][sig=%d] %s", __LINE__, pid, event, sig, msg); \
   } while (0)
-#else // ENABLE_DEBUG_LOG
+#else  // ENABLE_DEBUG_LOG
 #define DEBUG(...) ((void)0)
-#endif // ENABLE_DEBUG_LOG
+#endif  // ENABLE_DEBUG_LOG
 
 ////////// API check Functions ////////////
-#define _OK_CALL(exp, ok_, ...)                                                                                        \
-  __extension__({                                                                                                      \
-    typeof(exp) _OK_CALL_RESULT = (exp); /* typeof() here supports exp = WSTOPSIG() */                                 \
-    auto const _ = _OK_CALL_RESULT;                                                                                    \
-    if (!(ok_)) {                                                                                                      \
-      ERR(#exp);                                                                                                       \
-      __VA_ARGS__;                                                                                                     \
-    }                                                                                                                  \
-    _OK_CALL_RESULT;                                                                                                   \
+#define _OK_CALL(exp, ok_, ...)                                                        \
+  __extension__({                                                                      \
+    typeof(exp) _OK_CALL_RESULT = (exp); /* typeof() here supports exp = WSTOPSIG() */ \
+    auto const _ = _OK_CALL_RESULT;                                                    \
+    if (!(ok_)) {                                                                      \
+      ERR(#exp);                                                                       \
+      __VA_ARGS__;                                                                     \
+    }                                                                                  \
+    _OK_CALL_RESULT;                                                                   \
   })
 #define _OK_CALL_DEF(exp, ok_, def) _OK_CALL(exp, ok_, _OK_CALL_RESULT = (def))
 
@@ -232,23 +228,23 @@ static const uint_fast32_t signal_or_bits[32] = {
     [0] = 0,
     [SIGKILL] = 0,
     [SIGSTOP] = 0,
-    [SIGCHLD] = 0, // to cooperate with waitpid()
+    [SIGCHLD] = 0,  // to cooperate with waitpid()
     [SIGTRAP] = 0,
-    [SIGWINCH] = 0, // default SIG_IGN
+    [SIGWINCH] = 0,  // default SIG_IGN
 
-    [SIGPIPE] = UINT_FAST32_MAX, // let write() api handle
-    [SIGXFSZ] = UINT_FAST32_MAX, // let write() api handle
-    [SIGIO] = UINT_FAST32_MAX,   // do not use SIGIO mode IO
+    [SIGPIPE] = UINT_FAST32_MAX,  // let write() api handle
+    [SIGXFSZ] = UINT_FAST32_MAX,  // let write() api handle
+    [SIGIO] = UINT_FAST32_MAX,    // do not use SIGIO mode IO
     [SIGPWR] = UINT_FAST32_MAX,
 
     // dencent exit
     [SIGINT] = _SIGBIT2(SIGINT, 0),
     [SIGQUIT] = _SIGBIT2(SIGQUIT, 0),
     [SIGTERM] = _SIGBIT2(SIGTERM, 0),
-    [SIGALRM] = _SIGBIT2(SIGALRM, 0),     // tracer does not use timer
-    [SIGURG] = _SIGBIT2(SIGURG, 0),       // tracer does not use network
-    [SIGVTALRM] = _SIGBIT2(SIGVTALRM, 0), // tracer does not use virtual timer
-    [SIGPROF] = _SIGBIT2(SIGPROF, 0),     // tracer does not use prof timer
+    [SIGALRM] = _SIGBIT2(SIGALRM, 0),      // tracer does not use timer
+    [SIGURG] = _SIGBIT2(SIGURG, 0),        // tracer does not use network
+    [SIGVTALRM] = _SIGBIT2(SIGVTALRM, 0),  // tracer does not use virtual timer
+    [SIGPROF] = _SIGBIT2(SIGPROF, 0),      // tracer does not use prof timer
 
     // force exit
     [SIGILL] = _SIGBIT3(SIGILL, 0, SIGKILL),
@@ -263,7 +259,7 @@ static const uint_fast32_t signal_or_bits[32] = {
     // stop/continue all tracees
     [SIGCONT] = _SIGBIT2(SIGCONT, SIGSTOP),
     [SIGTSTP] = _SIGBIT2(SIGTSTP, SIGSTOP),
-    [SIGTTIN] = _SIGBIT2(SIGTTIN, SIGSTOP), // handle group-stop
+    [SIGTTIN] = _SIGBIT2(SIGTTIN, SIGSTOP),  // handle group-stop
     [SIGTTOU] = _SIGBIT2(SIGTTOU, SIGSTOP),
 
     // from kernel: ignore
@@ -278,8 +274,8 @@ static const uint_fast32_t signal_or_bits[32] = {
 };
 
 static inline const char *sig_core_name(const int s) {
-#define _CORE(s)                                                                                                       \
-  case s:                                                                                                              \
+#define _CORE(s) \
+  case s:        \
     return #s
   switch (s) {
     _CORE(SIGABRT);
@@ -306,10 +302,10 @@ static void tracer_sigaction_handler(const int sig, siginfo_t *const info, void 
     atomic_store_explicit(&sig_crash_ip, (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.gregs[REG_RIP]),
                           memory_order_relaxed);
     siglongjmp(sig_jump_env, sig);
-    _Exit(128 + sig); // should never come here
+    _Exit(128 + sig);  // should never come here
   }
 
-  auto const action = signal_or_bits[sig]; // handler is reg by going through signal_or_bits array
+  auto const action = signal_or_bits[sig];  // handler is reg by going through signal_or_bits array
   if ((action & _SIGBIT1(0)) || _SIG_FROM_USER(info) || sig == SIGCONT) {
     // hand signals in main():
     //  - all kill signals
@@ -406,7 +402,7 @@ static void setup_sentinel_if_need_or_die() {
   auto const tracer = _OK_CALL(fork(), _ >= 0, _Exit(64));
 
   if (tracer == 0)
-    return; // tracer as child
+    return;  // tracer as child
 
   // sentinel as parent
   tracer_in_sentinel = tracer;
@@ -437,7 +433,7 @@ static void setup_sentinel_if_need_or_die() {
   _OK_CALL(sigprocmask(SIG_SETMASK, &sig_mask_init, nullptr), 0 == _, _Exit(65));
 
   while (true) {
-    siginfo_t info = {.si_pid = 0}; // clear si_pid
+    siginfo_t info = {.si_pid = 0};  // clear si_pid
     if (waitid(P_PID, tracer, &info, WEXITED) == 0 && info.si_pid == tracer) {
       if (info.si_code == CLD_EXITED)
         _Exit(info.si_status);
@@ -448,7 +444,7 @@ static void setup_sentinel_if_need_or_die() {
 }
 
 static void setup_signal_handlers_or_die() {
-  auto const die_fd = _log_fd(); // init log fd
+  auto const die_fd = _log_fd();  // init log fd
   auto const die_sig = sigsetjmp(sig_jump_env, 1);
   if (die_sig) {
     // async signal safe urging exit
@@ -474,15 +470,15 @@ static void setup_signal_handlers_or_die() {
   }
 
   struct sigaction sa = {
-      .sa_flags = SA_SIGINFO, // DO *NOT* SET SA_RESTART
+      .sa_flags = SA_SIGINFO,  // DO *NOT* SET SA_RESTART
       .sa_sigaction = tracer_sigaction_handler,
   };
   struct sigaction sa_tstp = {
-      .sa_flags = SA_SIGINFO, // DO *NOT* SET SA_RESTART
+      .sa_flags = SA_SIGINFO,  // DO *NOT* SET SA_RESTART
       .sa_sigaction = tracer_sigaction_handler,
   };
   struct sigaction sa_cont = {
-      .sa_flags = SA_SIGINFO, // DO *NOT* SET SA_RESTART
+      .sa_flags = SA_SIGINFO,  // DO *NOT* SET SA_RESTART
       .sa_sigaction = tracer_sigaction_handler,
   };
 
@@ -538,10 +534,10 @@ static bool pids_init(const pid_t child) {
     while (total_read < (ssize_t)sizeof(buf) - 1) {
       ssize_t rb = read(fd, buf + total_read, sizeof(buf) - 1 - total_read);
       if (rb == 0)
-        break; // EOF
+        break;  // EOF
       else if (rb == -1) {
         if (errno == EINTR)
-          continue; // stopped by signal
+          continue;  // stopped by signal
         close(fd);
         goto PID_MAX_DEFAULT;
       }
@@ -561,8 +557,8 @@ static bool pids_init(const pid_t child) {
     pid_max = (uint32_t)pid_max_long;
   PID_MAX_DEFAULT:
   }
-  pid_max = (uint32_t)(UINT64_C(1) << (sizeof(pid_max) * 8 - __builtin_clz(pid_max - 1))); // round to the next 2 power
-  pids_base_offset = pid_max - (uint32_t)child; // pid_max is a exclusive limit, so child in [1, pid_max-1]
+  pid_max = (uint32_t)(UINT64_C(1) << (sizeof(pid_max) * 8 - __builtin_clz(pid_max - 1)));  // round to the next 2 power
+  pids_base_offset = pid_max - (uint32_t)child;  // pid_max is a exclusive limit, so child in [1, pid_max-1]
   pids_base_mask = pid_max - 1;
 
   auto const page_size = _OK_CALL(getpagesize(), _ >= 1024, return false);
@@ -578,21 +574,21 @@ static bool pids_init(const pid_t child) {
 static inline pid_t pids_tracee0() { return (pid_t)(pids_base_mask - pids_base_offset + 1); }
 static pids_slot *pids_slot_search(const uint32_t slot, const bool add) {
   auto const curr = pids + slot;
-  if (slot && 0 == curr->raw) { // link head (slot 0) is always active
+  if (slot && 0 == curr->raw) {  // link head (slot 0) is always active
     // a free slot
     if (add) {
       curr->next = pids->next;
       pids->next = slot;
     } else {
-      return nullptr; // found a free slot
+      return nullptr;  // found a free slot
     }
   }
 
   if (0 != curr->next) {
     auto const next = pids + curr->next;
-    if (next->bits == 0) { // remove the dangling next slot
+    if (next->bits == 0) {  // remove the dangling next slot
       curr->next = next->next;
-      next->raw = 0; // clear
+      next->raw = 0;  // clear
     }
   }
 
@@ -619,20 +615,20 @@ static void pids_kill_all(const int sig) {
     for (auto bits = slot->bits; bits; bits &= bits - 1) {
       auto const ctz = __builtin_ctz(bits);
       const pid_t child = ((curr << 5) + ctz - pids_base_offset) & pids_base_mask;
-      if (-1 == kill(child, sig)) { // use kill to support centos 5 or 6
+      if (-1 == kill(child, sig)) {  // use kill to support centos 5 or 6
         switch (errno) {
         case ESRCH:
-          slot->bits &= ~_SIGBIT1(ctz); // remove non existing child quickly
+          slot->bits &= ~_SIGBIT1(ctz);  // remove non existing child quickly
         case EPERM:
-          break; // ignore permission error
+          break;  // ignore permission error
         default:
-          FATAL(128 + sig, "BUG"); // bug if EINVAL or other unknown errors
+          FATAL(128 + sig, "BUG");  // bug if EINVAL or other unknown errors
         }
       }
     }
-    if (slot != pids && 0 == slot->bits) { // remove from the list
+    if (slot != pids && 0 == slot->bits) {  // remove from the list
       pids[prev].next = slot->next;
-      slot->raw = 0; // clear
+      slot->raw = 0;  // clear
       curr = prev;
     } else
       prev = curr;
@@ -647,9 +643,9 @@ static void pids_pt_cont_all() {
       const pid_t child = ((curr << 5) + ctz - pids_base_offset) & pids_base_mask;
       pt_cont(child, 0);
     }
-    if (slot != pids && 0 == slot->bits) { // remove from the list
+    if (slot != pids && 0 == slot->bits) {  // remove from the list
       pids[prev].next = slot->next;
-      slot->raw = 0; // clear
+      slot->raw = 0;  // clear
       curr = prev;
     } else
       prev = curr;
@@ -660,11 +656,11 @@ static void pids_kill_tracee0(const int sig) {
   if (-1 == kill(tracee0, sig)) {
     switch (errno) {
     case ESRCH:
-      pids->bits &= ~_SIGBIT1(0); // tracee0 is on slot 0 bit 0
+      pids->bits &= ~_SIGBIT1(0);  // tracee0 is on slot 0 bit 0
     case EPERM:
-      break; // ignore permission error
+      break;  // ignore permission error
     default:
-      FATAL(128 + sig, "BUG"); // bug if EINVAL or other unknown errors
+      FATAL(128 + sig, "BUG");  // bug if EINVAL or other unknown errors
     }
   }
 }
@@ -674,12 +670,12 @@ static void pids_kill_tracee0(const int sig) {
 #define SYS_INTERP_PATH_WORD_NR ((sizeof(SYS_INTERP_PATH) + sizeof(uint64_t) - 1) / sizeof(uint64_t))
 
 typedef struct {
-  char path[PATH_MAX]; // set to empty string when initialized incorrectly
+  char path[PATH_MAX];  // set to empty string when initialized incorrectly
   char libc_dir[PATH_MAX];
   Elf64_Addr entry_vaddr;
   Elf64_Addr dl_argv_vaddr;
   Elf64_Addr dl_initial_searchlist_vaddr;
-  bool has_argv0; // support --argv0 STRING since glibc 2.33
+  bool has_argv0;  // support --argv0 STRING since glibc 2.33
 } interp_info_t;
 
 typedef struct {
@@ -801,11 +797,11 @@ static bool init_chlibc_root() {
 #define GETENV_SAFE(var) ((env = getenv(var)) && env[0] != '\0')
 
   if (GETENV_SAFE("CHLIBC_PREFIX") && realpath(env, chlibc_root))
-    rst = true; // CHLIBC_PREFIX
+    rst = true;  // CHLIBC_PREFIX
   else if (GETENV_SAFE("CONDA_PREFIX") && realpath(env, chlibc_root))
-    rst = true; // CONDA_PREFIX
+    rst = true;  // CONDA_PREFIX
   else if (realpath("/proc/self/exe", self_exe) && realpath(dirname(self_exe), chlibc_root))
-    rst = true; // dirname($0)/..
+    rst = true;  // dirname($0)/..
 
   if (rst) {
     chlibc_root_len = strlen(chlibc_root);
@@ -842,8 +838,8 @@ static bool init_interp_info(const char *const path, const char *const libc_dir,
   fd = -1;
 
   auto const ehdr = (const Elf64_Ehdr *)elf;
-  _OK_CALL(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), _ == 0, goto UNMAP_DONE); // must elf
-  _OK_CALL(ehdr->e_ident[EI_CLASS], _ == ELFCLASS64, goto UNMAP_DONE);       // must elf64
+  _OK_CALL(memcmp(ehdr->e_ident, ELFMAG, SELFMAG), _ == 0, goto UNMAP_DONE);  // must elf
+  _OK_CALL(ehdr->e_ident[EI_CLASS], _ == ELFCLASS64, goto UNMAP_DONE);        // must elf64
 
   info->entry_vaddr = ehdr->e_entry;
 
@@ -917,12 +913,12 @@ static bool init_interp_info(const char *const path, const char *const libc_dir,
   size_t nsyms = 0;
   if (hash)
     nsyms = hash[1];
-  else { // parsing GNU_HASH table
+  else {  // parsing GNU_HASH table
     auto const nbuckets = gnu_hash[0];
     auto const symoff = gnu_hash[1];
     auto const bloom_sz = gnu_hash[2];
 
-    auto const bloom = (uint64_t *)(gnu_hash + 4); // skip shift2
+    auto const bloom = (uint64_t *)(gnu_hash + 4);  // skip shift2
     auto const bucket = (uint32_t *)(bloom + bloom_sz);
     auto const chain = bucket + nbuckets;
     uint32_t max = 0;
@@ -999,10 +995,9 @@ static_assert(alignof(pt_result_t) == 16);
 #define PT_ERRNO(r) ((typeof(errno))llabs((int64_t)((r) >> 64)))
 #define PT_VALUE(r) ((ptrace_return_t)(r))
 #define _PT_OP_IS_PEEK(op) ((op) == PTRACE_PEEKTEXT || (op) == PTRACE_PEEKDATA || (op) == PTRACE_PEEKUSER)
-static inline
-    __attribute__((always_inline)) pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r,
-                                                             const bool is_peek, const bool strict, char *const file,
-                                                             const int flen, char *const msg, const int line) {
+[[gnu::always_inline]]
+static inline pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r, const bool is_peek, const bool strict,
+                                        char *const file, const int flen, char *const msg, const int line) {
   auto const success = (typeof(r))-1 != r || (is_peek && 0 == errno);
   auto rst = success ? (pt_result_t)(uint64_t)r : (((pt_result_t)(uint64_t)(int64_t)(-errno) << 64) | UINT64_MAX);
   if (!success) {
@@ -1012,7 +1007,7 @@ static inline
       [[fallthrough]];
     case EPERM:
       if (!strict)
-        rst = ((pt_result_t)(int64_t)errno << 64) | UINT64_MAX; // success with errno in high word
+        rst = ((pt_result_t)(int64_t)errno << 64) | UINT64_MAX;  // success with errno in high word
       break;
     default:
       _log_error(file, flen, msg, line);
@@ -1021,10 +1016,10 @@ static inline
   return rst;
 }
 
-#define _PTRACE_CALL(op, pid, addr, data, strict)                                                                      \
-  (_PT_OP_IS_PEEK(op) ? _pt_check_rst(pid, (errno = 0, ptrace(op, pid, addr, data)), true, strict, __FILE__,           \
-                                      strlen(__FILE__), ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__)     \
-                      : _pt_check_rst(pid, ptrace(op, pid, addr, data), false, strict, __FILE__, strlen(__FILE__),     \
+#define _PTRACE_CALL(op, pid, addr, data, strict)                                                                  \
+  (_PT_OP_IS_PEEK(op) ? _pt_check_rst(pid, (errno = 0, ptrace(op, pid, addr, data)), true, strict, __FILE__,       \
+                                      strlen(__FILE__), ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__) \
+                      : _pt_check_rst(pid, ptrace(op, pid, addr, data), false, strict, __FILE__, strlen(__FILE__), \
                                       ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__))
 
 // call ptrace(...)
@@ -1032,15 +1027,15 @@ static inline
 #define PT_CALL_S(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, true)
 
 // call high level ptrace related functions which returning pt_result_t
-#define PT_OK_CALL_CHK(exp, ok_, ...)                                                                                  \
-  __extension__({                                                                                                      \
-    auto const r = _OK_CALL(exp, PT_SUCCESS(_) __VA_OPT__(, ) __VA_ARGS__);                                            \
-    auto const _ = PT_VALUE(r);                                                                                        \
-    if (!(ok_)) { /* check value */                                                                                    \
-      ERR(#exp);                                                                                                       \
-      __VA_ARGS__;                                                                                                     \
-    }                                                                                                                  \
-    _;                                                                                                                 \
+#define PT_OK_CALL_CHK(exp, ok_, ...)                                       \
+  __extension__({                                                           \
+    auto const r = _OK_CALL(exp, PT_SUCCESS(_) __VA_OPT__(, ) __VA_ARGS__); \
+    auto const _ = PT_VALUE(r);                                             \
+    if (!(ok_)) { /* check value */                                         \
+      ERR(#exp);                                                            \
+      __VA_ARGS__;                                                          \
+    }                                                                       \
+    _;                                                                      \
   })
 #define PT_OK_CALL(exp, ...) PT_OK_CALL_CHK(exp, true __VA_OPT__(, ) __VA_ARGS__)
 
@@ -1057,17 +1052,17 @@ static inline pt_result_t pt_get_msg(const pid_t pid) {
   auto const r = PT_CALL_S(PTRACE_GETEVENTMSG, pid, 0, &msg);
   return PT_SUCCESS(r) ? (pt_result_t)(uint64_t)msg : r;
 }
-#define PT_IS_GROUP_STOP(sig, err)                                                                                     \
+#define PT_IS_GROUP_STOP(sig, err) \
   ((SIGSTOP == (sig) || SIGTSTP == (sig) || SIGTTIN == (sig) || SIGTTOU == (sig)) && (err) == EINVAL)
 static inline pt_result_t pt_get_siginfo(const pid_t pid, siginfo_t dst[static 1]) {
-  auto const req_sig = dst->si_signo; // in-out parameter dst.si_signo must be the current signal
+  auto const req_sig = dst->si_signo;  // in-out parameter dst.si_signo must be the current signal
   auto const r = ptrace(PTRACE_GETSIGINFO, pid, 0, dst);
   auto const ok_rst = (pt_result_t)sizeof(*dst);
   if (LIKELY(r == 0))
     return ok_rst;
 
   if (UNLIKELY(r == -1 && PT_IS_GROUP_STOP(req_sig, errno)))
-    return ((pt_result_t)(uint64_t)(int64_t)(-EINVAL) << 64) | UINT64_MAX; // group-stop, skip error log
+    return ((pt_result_t)(uint64_t)(int64_t)(-EINVAL) << 64) | UINT64_MAX;  // group-stop, skip error log
 
   auto const rfull = _pt_check_rst(pid, r, false, true, __FILE__, strlen(__FILE__),
                                    ":%d ptrace" _STR_HELPER((PTRACE_GETSIGINFO, pid, 0, &si)), __LINE__);
@@ -1080,11 +1075,11 @@ static inline pt_result_t pt_get_regs(const pid_t pid, struct user_regs_struct d
 static inline pt_result_t pt_get_user(const pid_t pid, const size_t ofs) {
   return PT_CALL_S(PTRACE_PEEKUSER, pid, ofs, 0);
 }
-#define pt_get(pid, ...)                                                                                               \
-  _Generic((__VA_ARGS__ + 0),                                                                                          \
-      int: pt_get_msg,                                                                                                 \
-      siginfo_t *: pt_get_siginfo,                                                                                     \
-      struct user_regs_struct *: pt_get_regs,                                                                          \
+#define pt_get(pid, ...)                      \
+  _Generic((__VA_ARGS__ + 0),                 \
+      int: pt_get_msg,                        \
+      siginfo_t *: pt_get_siginfo,            \
+      struct user_regs_struct *: pt_get_regs, \
       size_t: pt_get_user)((pid)__VA_OPT__(, ) __VA_ARGS__)
 
 static inline pt_result_t pt_set_regs(const pid_t pid, const struct user_regs_struct dst[static 1]) {
@@ -1093,7 +1088,7 @@ static inline pt_result_t pt_set_regs(const pid_t pid, const struct user_regs_st
 static inline pt_result_t pt_set_user(const pid_t pid, const size_t ofs, const uint64_t data) {
   return PT_CALL_S(PTRACE_POKEUSER, pid, ofs, data);
 }
-#define pt_set(pid, addr, ...)                                                                                         \
+#define pt_set(pid, addr, ...) \
   _Generic(addr, struct user_regs_struct *: pt_set_regs, size_t: pt_set_user)((pid), (addr)__VA_OPT__(, ) __VA_ARGS__)
 
 static_assert(sizeof(uintptr_t) == sizeof_member(struct user_regs_struct, rip));
@@ -1104,49 +1099,49 @@ static inline pt_result_t pt_write_word(const pid_t pid, const uintptr_t remote_
   return PT_CALL_S(PTRACE_POKEDATA, pid, remote_addr, data);
 }
 
-#define PT_READ_CHK(pid, remote_addr, ok_, ...)                                                                        \
+#define PT_READ_CHK(pid, remote_addr, ok_, ...) \
   PT_OK_CALL_CHK(pt_read_word(pid, remote_addr), ok_ __VA_OPT__(, ) __VA_ARGS__)
 #define PT_READ(pid, remote_addr, ...) PT_READ_CHK(pid, remote_addr, true __VA_OPT__(, ) __VA_ARGS__)
-#define PT_WRITE(pid, remote_addr, word, ...)                                                                          \
+#define PT_WRITE(pid, remote_addr, word, ...) \
   PT_OK_CALL(pt_write_word(pid, remote_addr, word) __VA_OPT__(, ) __VA_ARGS__)
 
 // assume dst_sz and src_sz are multiple of (batch_word_nr * sizeof(uint64_t))
 // in expr "until_first_word_", variable "_" is the 1st word of the batch
 // when success, return the readed/written size in bytes, not include the 1st word matches "until_first_word_" when read
-#define PT_READ_BULKS(pid, remote_addr, batch_word_nr, dst, dst_sz, ok_1st_word_, until_1st_word_, err_full, ...)      \
-  __extension__({                                                                                                      \
-    static_assert(batch_word_nr > 0);                                                                                  \
-    auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                                                \
-    auto _pt_bulks_local = (uint64_t *)(uintptr_t)(dst);                                                               \
-    size_t _pt_bulks_sz = 0, _pt_bulks_full = 1;                                                                       \
-    while (_pt_bulks_sz < (dst_sz)) {                                                                                  \
-      auto const _ = PT_READ_CHK((pid), (uint64_t)(_pt_bulks_remote++), ok_1st_word_ __VA_OPT__(, ) __VA_ARGS__);      \
-      if (until_1st_word_) {                                                                                           \
-        _pt_bulks_full = 0;                                                                                            \
-        break;                                                                                                         \
-      }                                                                                                                \
-      *_pt_bulks_local++ = _;                                                                                          \
-      _pt_bulks_sz += sizeof(uint64_t);                                                                                \
-      for (auto _pt_bulks_left = (batch_word_nr) - 1; _pt_bulks_left--; _pt_bulks_sz += sizeof(uint64_t))              \
-        *_pt_bulks_local++ = PT_READ((pid), (uint64_t)(_pt_bulks_remote++)__VA_OPT__(, ) __VA_ARGS__);                 \
-    }                                                                                                                  \
-    if (err_full && _pt_bulks_full) {                                                                                  \
-      ERR("bulk read dest buffer is full: %s -> %s", #remote_addr, #dst);                                              \
-      __VA_ARGS__;                                                                                                     \
-    }                                                                                                                  \
-    _pt_bulks_sz;                                                                                                      \
+#define PT_READ_BULKS(pid, remote_addr, batch_word_nr, dst, dst_sz, ok_1st_word_, until_1st_word_, err_full, ...) \
+  __extension__({                                                                                                 \
+    static_assert(batch_word_nr > 0);                                                                             \
+    auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                                           \
+    auto _pt_bulks_local = (uint64_t *)(uintptr_t)(dst);                                                          \
+    size_t _pt_bulks_sz = 0, _pt_bulks_full = 1;                                                                  \
+    while (_pt_bulks_sz < (dst_sz)) {                                                                             \
+      auto const _ = PT_READ_CHK((pid), (uint64_t)(_pt_bulks_remote++), ok_1st_word_ __VA_OPT__(, ) __VA_ARGS__); \
+      if (until_1st_word_) {                                                                                      \
+        _pt_bulks_full = 0;                                                                                       \
+        break;                                                                                                    \
+      }                                                                                                           \
+      *_pt_bulks_local++ = _;                                                                                     \
+      _pt_bulks_sz += sizeof(uint64_t);                                                                           \
+      for (auto _pt_bulks_left = (batch_word_nr) - 1; _pt_bulks_left--; _pt_bulks_sz += sizeof(uint64_t))         \
+        *_pt_bulks_local++ = PT_READ((pid), (uint64_t)(_pt_bulks_remote++)__VA_OPT__(, ) __VA_ARGS__);            \
+    }                                                                                                             \
+    if (err_full && _pt_bulks_full) {                                                                             \
+      ERR("bulk read dest buffer is full: %s -> %s", #remote_addr, #dst);                                         \
+      __VA_ARGS__;                                                                                                \
+    }                                                                                                             \
+    _pt_bulks_sz;                                                                                                 \
   })
 
-#define PT_READ_BULKS_FAST(pid, remote_addr, dst, dst_sz, ...)                                                         \
+#define PT_READ_BULKS_FAST(pid, remote_addr, dst, dst_sz, ...) \
   PT_READ_BULKS(pid, remote_addr, 1, dst, dst_sz, true, false, false __VA_OPT__(, ) __VA_ARGS__)
-#define PT_WRITE_BULKS(pid, remote_addr, src, src_sz, ...)                                                             \
-  __extension__({                                                                                                      \
-    auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                                                \
-    auto _pt_bulks_local = (uint64_t *)(uintptr_t)(src);                                                               \
-    size_t _pt_bulks_sz = 0;                                                                                           \
-    for (; _pt_bulks_sz < (src_sz); _pt_bulks_sz += sizeof(uint64_t))                                                  \
-      PT_WRITE((pid), (uint64_t)(_pt_bulks_remote++), *_pt_bulks_local++ __VA_OPT__(, ) __VA_ARGS__);                  \
-    _pt_bulks_sz;                                                                                                      \
+#define PT_WRITE_BULKS(pid, remote_addr, src, src_sz, ...)                                            \
+  __extension__({                                                                                     \
+    auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                               \
+    auto _pt_bulks_local = (uint64_t *)(uintptr_t)(src);                                              \
+    size_t _pt_bulks_sz = 0;                                                                          \
+    for (; _pt_bulks_sz < (src_sz); _pt_bulks_sz += sizeof(uint64_t))                                 \
+      PT_WRITE((pid), (uint64_t)(_pt_bulks_remote++), *_pt_bulks_local++ __VA_OPT__(, ) __VA_ARGS__); \
+    _pt_bulks_sz;                                                                                     \
   })
 
 // assume size is multiple of sizeof(uint64_t), return the length not including '\0'
@@ -1161,16 +1156,17 @@ static size_t pt_read_cstring(const pid_t pid, uintptr_t remote_addr, void *cons
     *wbuf = PT_READ(pid, remote_addr, *cbuf = 0; return (size_t)-1);
     auto const p = memchr(wbuf, 0, sizeof(*wbuf));
     if (p)
-      return copied + ((uintptr_t)p - (uintptr_t)wbuf); // not including '\0'
+      return copied + ((uintptr_t)p - (uintptr_t)wbuf);  // not including '\0'
     ++wbuf;
     copied += sizeof(uint64_t);
     remote_addr += sizeof(uint64_t);
   }
   cbuf[size - 1] = 0;
-  return size; // overflow
+  return size;  // overflow
 }
 
-[[noreturn]] static void kill9_child_and_exit(const pid_t child, const int code) {
+[[noreturn]]
+static void kill9_child_and_exit(const pid_t child, const int code) {
   _OK_CALL(kill(child, SIGKILL), _ == 0 || errno == ESRCH);
   _Exit(code);
 }
@@ -1190,9 +1186,9 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
     auto const p = _OK_CALL(waitpid(child, &status, 0), _ == -1 || _ == child, kill9_child_and_exit(child, 64));
     if (-1 == p) {
       switch (errno) {
-      case ECHILD: // child does not exist
+      case ECHILD:  // child does not exist
         FATAL(65, "child exits before ptrace handshaking");
-      case EINTR: // caught signals
+      case EINTR:  // caught signals
         continue;
       default:
         FATAL(66, "waitpid when ptrace handshaking");
@@ -1204,16 +1200,16 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
 
   // the first stop, do handshake
   if (WIFEXITED(status)) {
-    _Exit(WEXITSTATUS(status)); // child exits by exit()
+    _Exit(WEXITSTATUS(status));  // child exits by exit()
   } else if (WIFSIGNALED(status)) {
-    _Exit(128 + WTERMSIG(status)); // child exits by signal
+    _Exit(128 + WTERMSIG(status));  // child exits by signal
   } else if (!WIFSTOPPED(status)) {
     kill9_child_and_exit(child, 67);
   }
 
 #ifdef ENABLE_DEBUG_LOG
   const int sig =
-#endif // ENABLE_DEBUG_LOG
+#endif  // ENABLE_DEBUG_LOG
       _OK_CALL(WSTOPSIG(status), _ == SIGSTOP || _ == SIGTRAP, kill9_child_and_exit(child, 68));
 
   // alloc pid map/list
@@ -1253,7 +1249,7 @@ static uint_fast32_t process_signals() {
   while (0 != (signals = atomic_exchange_explicit(&pending_signal, 0, memory_order_relaxed))) {
     if (signals & _SIGBIT1(0)) {
       DEBUG(0, 0, signals, "receive kill signals");
-      return signals; // return to switch to existing loop
+      return signals;  // return to switch to existing loop
     } else if (signals & _SIGBIT1(SIGSTOP)) {
       // signals here should be kill-ed from user, not group-stopped
       auto const sig = __builtin_ctz(signals & _SIGBIT4(SIGTTIN, SIGTTOU, SIGTSTP, SIGCONT));
@@ -1269,7 +1265,7 @@ static uint_fast32_t process_signals() {
 
     for (; signals; signals &= signals - 1) {
       DEBUG(0, 0, __builtin_ctz(signals), "receive normal signal");
-      pids_kill_tracee0(__builtin_ctz(signals)); // user level signals only forward to tracee0
+      pids_kill_tracee0(__builtin_ctz(signals));  // user level signals only forward to tracee0
     }
   }
   return signals;
@@ -1277,7 +1273,7 @@ static uint_fast32_t process_signals() {
 
 static inline uint64_t now_ns() {
   struct timespec ts;
-  syscall(SYS_clock_gettime, CLOCK_MONOTONIC, &ts); // only used in exiting stage, syscall is accecptable
+  syscall(SYS_clock_gettime, CLOCK_MONOTONIC, &ts);  // only used in exiting stage, syscall is accecptable
   return (uint64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
@@ -1286,23 +1282,23 @@ typedef struct {
     struct {
       union {
         uint64_t arg1;
-        uint64_t interp;                // execve
-        uint64_t dl_initial_searchlist; // pre-prctl for glibc before 2.33
-        uint64_t set_name;              // prctl
+        uint64_t interp;                 // execve
+        uint64_t dl_initial_searchlist;  // pre-prctl for glibc before 2.33
+        uint64_t set_name;               // prctl
       };
       union {
         uint64_t arg2;
-        uint64_t argv; // execve
-        uint64_t comm; // prctl
+        uint64_t argv;  // execve
+        uint64_t comm;  // prctl
       };
       union {
         uint64_t arg3;
-        uint64_t envp;  // execve
-        uint64_t argv0; // prctl && hw break
+        uint64_t envp;   // execve
+        uint64_t argv0;  // prctl && hw break
       };
       union {
         uint64_t arg4;
-        uint64_t this_param; // 0 for pre-execve, used to select syscall number of execve or prctl
+        uint64_t this_param;  // 0 for pre-execve, used to select syscall number of execve or prctl
       };
       union {
         uint64_t arg5;
@@ -1330,7 +1326,7 @@ static_assert(alignof(inject_param_t) % 8 == 0);
 static_assert(offsetof(inject_param_t, argv_array) == offsetof(inject_param_t, elf_path));
 
 static size_t exec_buffer_sz;
-static uint8_t *exec_buffer; // global static buffer to copy the stack data on exec stop, should be align to 4K
+static uint8_t *exec_buffer;  // global static buffer to copy the stack data on exec stop, should be align to 4K
 static bool alloc_exec_buffer() {
   auto const arg_max = _OK_CALL(sysconf(_SC_ARG_MAX), INT64_C(4096) <= _ && _ <= INT64_C(4194304), return false);
   auto const page_size = _OK_CALL(getpagesize(), _ >= 1024, return false);
@@ -1358,13 +1354,13 @@ typedef struct {
   uint64_t end_ofs;
   uint64_t param_ofs;
   uint64_t total_size;
-  uint64_t auxv_map[64]; // AT_EXECFN = 31
+  uint64_t auxv_map[64];  // AT_EXECFN = 31
 } exec_arg_t;
 
 // download and parse the original execve stack defined by 64bit Linux ABI
 // [rsp low->high]: |argc|argv0|...|0|envp0|...|0|auxv0t|auxv0v|...|0|0|padding|AT_RANDOM data|
 static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, exec_arg_t *const exec_arg) {
-  uint64_t ofs = 0; // offset for both remote rsp base and local exec buffer base
+  uint64_t ofs = 0;  // offset for both remote rsp base and local exec buffer base
   exec_arg->rsp = rsp;
 
   // argc, at least 1
@@ -1377,13 +1373,13 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, exec_arg_t *cons
   PT_READ_BULKS(pid, rsp + ofs, 1, exec_buffer + ofs, exec_arg->argc * sizeof(uint64_t), _ != 0, false, false,
                 return false);
   ofs += (exec_arg->argc + 1) * sizeof(uint64_t);
-  *(uint64_t *)(exec_buffer + ofs - sizeof(uint64_t)) = 0; // append NULL after argv
+  *(uint64_t *)(exec_buffer + ofs - sizeof(uint64_t)) = 0;  // append NULL after argv
   exec_arg->argv0 = *(uint64_t *)(exec_buffer + exec_arg->argv_ofs);
 
   // envp[]
   exec_arg->envp_ofs = ofs;
   ofs += PT_READ_BULKS(pid, rsp + ofs, 1, exec_buffer + ofs, (1 << 21), true, _ == 0, true, return false);
-  *(uint64_t *)(exec_buffer + ofs) = 0; // append NULL after envp
+  *(uint64_t *)(exec_buffer + ofs) = 0;  // append NULL after envp
   ofs += sizeof(uint64_t);
 
   // auxv[]
@@ -1441,7 +1437,7 @@ static bool fill_param_static(const pid_t pid, exec_arg_t *const exec_arg, injec
 
   // fix AT_BASE and AT_EXECFN in auxv map
   auto const interp_at_base = exec_arg->auxv_map[AT_ENTRY] - target_interp.entry_vaddr;
-  auto const orig_at_execfn = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[2]; // argv[2]
+  auto const orig_at_execfn = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[2];  // argv[2]
   for (auto p = (Elf64_auxv_t *)(exec_buffer + exec_arg->auxv_ofs); p->a_type != AT_NULL; ++p) {
     if (p->a_type == AT_BASE)
       p->a_un.a_val = interp_at_base;
@@ -1452,12 +1448,12 @@ static bool fill_param_static(const pid_t pid, exec_arg_t *const exec_arg, injec
   // copy elf_path
   size_t written = 0;
   if (!target_interp.has_argv0) {
-    auto const argv5 = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[5]; // elf path in argv
+    auto const argv5 = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[5];  // elf path in argv
     written = 1 + _OK_CALL(pt_read_cstring(pid, argv5, param->elf_path, PATH_MAX), _ < PATH_MAX, return false);
   }
 
   // calculate comm
-  auto const argv2 = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[2]; // orig at_execfn in argv
+  auto const argv2 = ((const uint64_t *)(exec_buffer + exec_arg->argv_ofs))[2];  // orig at_execfn in argv
   char *at_execfn = param->elf_path + written;
   _OK_CALL(pt_read_cstring(pid, argv2, at_execfn, MAX_ARG_STRLEN), _ < MAX_ARG_STRLEN, return false);
   auto const last_slash = strrchr(at_execfn, '/');
@@ -1469,8 +1465,8 @@ static bool fill_param_static(const pid_t pid, exec_arg_t *const exec_arg, injec
 
   // fill param
   param->dl_initial_searchlist = interp_at_base + target_interp.dl_initial_searchlist_vaddr;
-  param->comm = argv2 + comm_idx;                    // in system string table
-  param->argv0 = exec_arg->argv0 + sizeof(uint64_t); // in system string table
+  param->comm = argv2 + comm_idx;                     // in system string table
+  param->argv0 = exec_arg->argv0 + sizeof(uint64_t);  // in system string table
   param->this_param = exec_arg->rsp + exec_arg->param_ofs;
   param->dr0 = PT_OK_CALL(pt_get(pid, offsetof(struct user, u_debugreg[0])), return false);
   param->dr7 = PT_OK_CALL(pt_get(pid, offsetof(struct user, u_debugreg[7])), return false);
@@ -1506,7 +1502,7 @@ static bool fill_param_dynamic(const pid_t pid, exec_arg_t *const exec_arg, inje
     }
   }
 
-  if (!pt_interp_vaddr) // pt_phdr_vaddr is optional
+  if (!pt_interp_vaddr)  // pt_phdr_vaddr is optional
     return false;
 
   auto const interp_addr = exec_arg->auxv_map[AT_PHDR] - pt_phdr_vaddr + pt_interp_vaddr;
@@ -1521,9 +1517,9 @@ static bool fill_param_dynamic(const pid_t pid, exec_arg_t *const exec_arg, inje
   }
 
   // layout from exec_arg.end_ofs see struct inject_param_t
-  auto const execve_argc = exec_arg->argc + (target_interp.has_argv0 ? 7 : 5); // argv_array size
-  auto const strtbl = (char *)(param->argv_array + execve_argc + 1);           // string table
-  size_t written = 0;                                                          // chars written to string table
+  auto const execve_argc = exec_arg->argc + (target_interp.has_argv0 ? 7 : 5);  // argv_array size
+  auto const strtbl = (char *)(param->argv_array + execve_argc + 1);            // string table
+  size_t written = 0;                                                           // chars written to string table
   auto const strtbl_ofs = (uintptr_t)strtbl - (uintptr_t)exec_buffer;
 
   // copy argv[1..argc], including last NULL
@@ -1536,7 +1532,7 @@ static bool fill_param_dynamic(const pid_t pid, exec_arg_t *const exec_arg, inje
 
   // copy old argv[0]
   param->argv_array[0] = strtbl_ofs + written;
-  memcpy(strtbl + written, "/\xFF\xFF\xFF\xFF\xFF\xFF/", 8); // put magic before argv0
+  memcpy(strtbl + written, "/\xFF\xFF\xFF\xFF\xFF\xFF/", 8);  // put magic before argv0
   written += 8;
   written += 1 + _OK_CALL(pt_read_cstring(pid, exec_arg->argv0, strtbl + written, MAX_ARG_STRLEN - 8),
                           _ < MAX_ARG_STRLEN - 8, return false);
@@ -1570,7 +1566,7 @@ static bool fill_param_dynamic(const pid_t pid, exec_arg_t *const exec_arg, inje
     auto const ld_lib_path_len =
         _OK_CALL(pt_read_cstring(pid, *p + 16, strtbl + written, MAX_ARG_STRLEN), _ < MAX_ARG_STRLEN, return false);
     if (ld_lib_path_len) {
-      strtbl[written - 1] = ':'; // replace '\0' with ':'
+      strtbl[written - 1] = ':';  // replace '\0' with ':'
       written += ld_lib_path_len + 1;
     }
     break;
@@ -1590,7 +1586,7 @@ static bool fill_param_dynamic(const pid_t pid, exec_arg_t *const exec_arg, inje
     _OK_CALL(snprintf(proc_exec, sizeof(proc_exec), "/proc/%d/exe", pid), _ < (int)sizeof(proc_exec), return false);
     _OK_CALL(realpath(proc_exec, strtbl + written), _ != nullptr, return false);
     if (strncmp(strtbl + written, chlibc_root, chlibc_root_len) != 0)
-      return false; // not under chlibc root
+      return false;  // not under chlibc root
     written += strlen(strtbl + written) + 1;
   }
 
@@ -1618,14 +1614,14 @@ static bool handle_exec(const pid_t pid) {
   PT_OK_CALL(pt_get(pid, &regs), return false);
 
   exec_arg_t exec_arg;
-  if (!parse_exec_arg(pid, regs.rsp, &exec_arg)) // rsp aligns to 16 bytes via 64bit Linux ABI
+  if (!parse_exec_arg(pid, regs.rsp, &exec_arg))  // rsp aligns to 16 bytes via 64bit Linux ABI
     return false;
 
   auto const param = ALIGN_U(exec_buffer + exec_arg.end_ofs, inject_param_t);
   exec_arg.param_ofs = (uintptr_t)param - (uintptr_t)exec_buffer;
 
-  if (exec_arg.auxv_map[AT_ENTRY] == regs.rip ? !fill_param_static(pid, &exec_arg, param)   // static elf
-                                              : !fill_param_dynamic(pid, &exec_arg, param)) // elf load by PT_INTERP
+  if (exec_arg.auxv_map[AT_ENTRY] == regs.rip ? !fill_param_static(pid, &exec_arg, param)    // static elf
+                                              : !fill_param_dynamic(pid, &exec_arg, param))  // elf load by PT_INTERP
     return false;
 
   // backup param address in DR0, disable HW breakpoints
@@ -1639,14 +1635,14 @@ static bool handle_exec(const pid_t pid) {
   _OK_CALL(pt_set(pid, &regs), PT_SUCCESS(_), return false);
   PT_WRITE_BULKS(pid, exec_arg.rsp, exec_buffer, exec_arg.total_size);
 
-  return true; // continue to syscall
+  return true;  // continue to syscall
 }
 
 static bool inject_syscall(const pid_t pid, struct user_regs_struct *const regs) {
   // download param
   auto const param_remote = PT_OK_CALL(pt_get(pid, offsetof(struct user, u_debugreg[0])), return false);
   inject_param_t param;
-  PT_READ_BULKS_FAST(pid, param_remote, &param, end_offsetof(typeof(param), arg6)); // copy only syscall parameters
+  PT_READ_BULKS_FAST(pid, param_remote, &param, end_offsetof(typeof(param), arg6));  // copy only syscall parameters
 
   // upload regs
   static_assert(sizeof_member(typeof(param), ctx) == sizeof(*regs));
@@ -1662,9 +1658,9 @@ static bool inject_syscall(const pid_t pid, struct user_regs_struct *const regs)
       auto const dr0 = param.dl_initial_searchlist;
 
       uint64_t dr7 = 0;
-      dr7 |= 1 << 0;  // L0 = 1
-      dr7 |= 1 << 16; // RW0 = 01 (write)
-      dr7 |= 3 << 18; // LEN0 = 11 (4 bytes to support all old glibc from 2.5 to 2.32)
+      dr7 |= 1 << 0;   // L0 = 1
+      dr7 |= 1 << 16;  // RW0 = 01 (write)
+      dr7 |= 3 << 18;  // LEN0 = 11 (4 bytes to support all old glibc from 2.5 to 2.32)
 
       _OK_CALL(pt_set(pid, offsetof(struct user, u_debugreg[0]), dr0), PT_SUCCESS(_), return false);
       _OK_CALL(pt_set(pid, offsetof(struct user, u_debugreg[7]), dr7), PT_SUCCESS(_), return false);
@@ -1698,21 +1694,21 @@ static bool restore_syscall(const pid_t pid, struct user_regs_struct *const regs
   }
 
   // download param
-  auto const param_remote = regs->r10; // arg4
+  auto const param_remote = regs->r10;  // arg4
   inject_param_t param;
   PT_READ_BULKS_FAST(pid, param_remote, &param, end_offsetof(typeof(param), ctx));
 
   if (regs->orig_rax == SYS_prctl && !target_interp.has_argv0) {
     // restore and upload params for HW breakpoints
-    param.argv0 = regs->rdx; // arg3
-    param.dr0 = regs->r8;    // arg5
-    param.dr7 = regs->r9;    // arg6
+    param.argv0 = regs->rdx;  // arg3
+    param.dr0 = regs->r8;     // arg5
+    param.dr7 = regs->r9;     // arg6
     PT_WRITE(pid, param_remote + offsetof(typeof(param), argv0), param.argv0);
     PT_WRITE(pid, param_remote + offsetof(typeof(param), dr0), param.dr0);
     PT_WRITE(pid, param_remote + offsetof(typeof(param), dr7), param.dr7);
   }
 
-  param.ctx.rip -= 2; // point to 0F05 syscall
+  param.ctx.rip -= 2;  // point to 0F05 syscall
   _OK_CALL(pt_set(pid, &param.ctx), PT_SUCCESS(_), return false);
   return true;
 }
@@ -1733,7 +1729,7 @@ static bool fix_argv0_on_hw_brk(const pid_t pid) {
   // fix argv0: elf_path -> previous argv0
   PT_WRITE(pid, dl_argv, param.argv0, return false);
 
-  pt_set(pid, offsetof(struct user, u_debugreg[0]), param.dr0); // restore DR0 and DR7
+  pt_set(pid, offsetof(struct user, u_debugreg[0]), param.dr0);  // restore DR0 and DR7
   pt_set(pid, offsetof(struct user, u_debugreg[7]), param.dr7);
   return true;
 }
@@ -1759,11 +1755,11 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     // check hw breakpoint
     auto const dr6 = PT_OK_CALL(pt_get(pid, offsetof(struct user, u_debugreg[6])), goto CONT);
     if (dr6) {
-      if (exitsig == 0 && dr6 & 1) { // ignore DR1~3
+      if (exitsig == 0 && dr6 & 1) {  // ignore DR1~3
         if (!fix_argv0_on_hw_brk(pid))
           DEBUG(pid, 0, 0, "fail to fix argv0 on hw breakpoint");
       }
-      PT_OK_CALL(pt_set(pid, offsetof(struct user, u_debugreg[6]), 0), goto CONT); // clear DR6
+      PT_OK_CALL(pt_set(pid, offsetof(struct user, u_debugreg[6]), 0), goto CONT);  // clear DR6
       goto CONT;
     }
 
@@ -1778,7 +1774,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
           ptrace_tracee0_exit_code = msg & 0xff ? 128 + (msg & 0xff) : ((msg >> 8) & 0xff);
         }
       }
-      deliver_sig = 0; // skip exitsig on exit event
+      deliver_sig = 0;  // skip exitsig on exit event
       pids_del(pid);
       break;
 
@@ -1791,7 +1787,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
       auto const r = pt_get(pid);
       if (PT_SUCCESS(r)) {
         if (exitsig)
-          kill((pid_t)PT_VALUE(r), exitsig); // fast kill
+          kill((pid_t)PT_VALUE(r), exitsig);  // fast kill
         else
           pids_add((pid_t)PT_VALUE(r));
       }
@@ -1800,7 +1796,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     case PTRACE_EVENT_EXEC:
       DEBUG(pid, status >> 16, exitsig, "EVENT_EXEC");
       if (0 == exitsig && handle_exec(pid) && pt_syscall(pid, deliver_sig))
-        return; // continue to the next syscall to replace the interp
+        return;  // continue to the next syscall to replace the interp
 
       break;
 
@@ -1813,14 +1809,14 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     PT_OK_CALL(pt_get(pid, &regs), goto CONT);
     if (regs.orig_rax == SYS_execve && regs.rax == 0) {
       if (pt_syscall(pid, deliver_sig))
-        return; // exit-stop of execve after PTRACE_EVENT_EXEC
+        return;  // exit-stop of execve after PTRACE_EVENT_EXEC
     } else if (regs.rax == regs.orig_rax || (int64_t)regs.rax == -(int64_t)ENOSYS) {
       // now on the enter-stop of brk(0) in interp for protecting the bootstrap heap
       if (inject_syscall(pid, &regs) && pt_syscall(pid, deliver_sig))
-        return; // continue to the syscall exit-stop
+        return;  // continue to the syscall exit-stop
     } else if ((regs.orig_rax == SYS_execve && (int64_t)regs.rax < 0) || regs.orig_rax == SYS_prctl) {
       if (!restore_syscall(pid, &regs))
-        deliver_sig = SIGKILL; // restore fail, force kill the tracee
+        deliver_sig = SIGKILL;  // restore fail, force kill the tracee
     }
   } else {
     // now signal-delivery-stops or group-stops
@@ -1869,7 +1865,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
       } else if (PT_IS_GROUP_STOP(stopsig, PT_ERRNO(r))) {
         DEBUG(pid, status >> 16, stopsig, "Group-stop Signals");
         ptrace_has_group_stopped = true;
-        return; // in PTRACE_ATTACH mode, leave the tracees stopped
+        return;  // in PTRACE_ATTACH mode, leave the tracees stopped
       }
     } break;
 
@@ -1886,9 +1882,9 @@ static void process(const pid_t pid, const int status, const int exitsig) {
             static uint64_t sig_forward_dup_ttl[32] = {0};
             auto const curr = now_ns();
             if (curr < sig_forward_dup_ttl[stopsig])
-              deliver_sig = 0; // do not forward a duplicated signal
+              deliver_sig = 0;  // do not forward a duplicated signal
             else
-              sig_forward_dup_ttl[stopsig] = curr + UINT64_C(20000000); // 20ms
+              sig_forward_dup_ttl[stopsig] = curr + UINT64_C(20000000);  // 20ms
           }
         }
         DEBUG(pid, status >> 16, stopsig, deliver_sig ? "Forward normal signals" : "Drop a duplicated signal");
@@ -1906,17 +1902,17 @@ static uint_fast32_t ptrace_loop() {
   int status;
   while (0 == (signals = process_signals())) {
     // ERR("heartbeat %llu", now_ns() / 1000000000);
-    auto const pid = waitpid(-1, &status, __WALL); // wait signals or ptrace events
+    auto const pid = waitpid(-1, &status, __WALL);  // wait signals or ptrace events
     if (pid > 0)
       process(pid, status, 0);
     else
       switch (errno) {
       case EINTR:
-        break; // stop by signal
+        break;  // stop by signal
       case ECHILD:
-        return 0; // no ptrace tracees
+        return 0;  // no ptrace tracees
       default:
-        ERR("waitpid unknown error"); // should never reach here
+        ERR("waitpid unknown error");  // should never reach here
       }
   }
   return signals;
@@ -1957,18 +1953,18 @@ static int ptrace_exiting(const uint_fast32_t signals) {
       case EINTR:
         continue;
       case ECHILD:
-        return 128 + sig; // no ptrace tracees
+        return 128 + sig;  // no ptrace tracees
       default:
-        ERR("waitpid unknown error"); // should never reach here
+        ERR("waitpid unknown error");  // should never reach here
       }
     } else
-      nanosleep(&sleepns, nullptr); // process signals in the next loop
+      nanosleep(&sleepns, nullptr);  // process signals in the next loop
   }
 
   if (ptrace_has_exitkill)
     return 128 + sig;
   else if (!is_kill)
-    pids_kill_all(SIGKILL); // promote signals
+    pids_kill_all(SIGKILL);  // promote signals
 
   // force exiting loop
   while ((curr = now_ns()) < deadline) {
@@ -1981,12 +1977,12 @@ static int ptrace_exiting(const uint_fast32_t signals) {
       case EINTR:
         continue;
       case ECHILD:
-        return 128 + sig; // no ptrace tracees
+        return 128 + sig;  // no ptrace tracees
       default:
-        ERR("waitpid unknown error"); // should never reach here
+        ERR("waitpid unknown error");  // should never reach here
       }
     } else
-      nanosleep(&sleepns, nullptr); // skip signals in this loop
+      nanosleep(&sleepns, nullptr);  // skip signals in this loop
   }
 
   return 128 + sig;
@@ -2034,7 +2030,7 @@ int main(const int argc, char *const argv[]) {
   if (0 == tracee0) {
     // ptrace handshake as the first tracee
     _OK_CALL(ptrace(PTRACE_TRACEME, 0, 0, 0), _ != -1, _Exit(1));
-    _OK_CALL(raise(SIGSTOP), _ == 0, _Exit(2)); // si_code in (SI_USER, SI_TKILL), si_pid is the child pid
+    _OK_CALL(raise(SIGSTOP), _ == 0, _Exit(2));  // si_code in (SI_USER, SI_TKILL), si_pid is the child pid
 
     // restore sig masks
     _OK_CALL(sigprocmask(SIG_SETMASK, &sig_mask_init, nullptr), _ == 0, return 3);
@@ -2048,7 +2044,7 @@ int main(const int argc, char *const argv[]) {
   _OK_CALL(sigprocmask(SIG_SETMASK, &sig_mask_init, nullptr), _ == 0, kill9_child_and_exit(tracee0, 69));
 
   // ptrace main
-  ptrace_handshake_as_tracer_or_die(tracee0); // handshake and send the first PTRACE_CONT th tracee0
+  ptrace_handshake_as_tracer_or_die(tracee0);  // handshake and send the first PTRACE_CONT th tracee0
   auto const esignals = ptrace_loop();
   exit_code = ptrace_exiting(esignals);
 
@@ -2056,6 +2052,6 @@ int main(const int argc, char *const argv[]) {
     ERR("PIDs table is not clean, table head bits=%u, next=%u", pids->bits, pids->next);
 
 EXIT:
-  _log_writev(nullptr, 0); // flush log
+  _log_writev(nullptr, 0);  // flush log
   return exit_code ? exit_code : ptrace_tracee0_exit_code;
 }

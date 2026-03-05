@@ -1,3 +1,4 @@
+---
 lefthook: ./pixiw run --no-progress lefthook
 # use 'jobs' config
 min_version: 1.10.0
@@ -5,15 +6,15 @@ templates:
   run: run --quiet --no-progress
 colors: true
 output:
-  - meta # print lefthook version
-  - summary # print summary block (successful and failed steps)
-  - empty_summary # print summary heading when there are no steps to run
+  - meta  # print lefthook version
+  - summary  # print summary block (successful and failed steps)
+  - empty_summary  # print summary heading when there are no steps to run
   # - success # print successful steps
   # - failure # print failed steps printing
   # - execution # print any execution logs
   # - execution_out  # print execution output
   # - execution_info # print `execute > ...` logging
-  - skips # print "skip" (i.e. no files matched)
+  - skips  # print "skip" (i.e. no files matched)
 # lint (w/ formatting on-the-fly or post-lint) on pre-commit git hook
 pre-commit:
   parallel: true
@@ -36,7 +37,7 @@ pre-commit:
       tags: [lint]
       run: typos {staged_files}
       file_types: [text]
-      stage_fixed: false # need manually confirm
+      stage_fixed: false  # need manually confirm
     - name: For toml files
       glob: "*.toml"
       group:
@@ -52,7 +53,37 @@ pre-commit:
               RUST_LOG: warn
             run: taplo fmt {staged_files}
             stage_fixed: true
-    - name: Format yaml
-      glob: "*.{yml,yaml}"
-      run: yamlfmt {staged_files}
-      stage_fixed: true
+    - name: For yaml files
+      glob: "{*.yml,*.yaml,.clang-format}"
+      group:
+        piped: true
+        jobs:
+          - name: Check YAML
+            tags: [lint]
+            exclude: ".clang-format"
+            run: check-yaml {staged_files}
+          - name: Check multi-doc YAML
+            tags: [lint]
+            exclude: "*.{yml,yaml}"
+            run: check-yaml --allow-multiple-documents {staged_files}
+          - name: Format YAML files
+            run: yamlfmt {staged_files}
+            stage_fixed: true
+    - name: For cmake files
+      glob: "{CMakeLists.txt,*.cmake}"
+      group:
+        piped: true
+        jobs:
+          - name: Lint cmake files
+            tags: [lint]
+            run: cmake-lint {staged_files}
+          - name: Format cmake files
+            run: cmake-format --in-place {staged_files}
+            stage_fixed: true
+    - name: For C files
+      glob: "{*.c,*.h}"
+      group:
+        piped: true
+        jobs:
+          - name: Format C files
+            run: clang-format -i {staged_files}

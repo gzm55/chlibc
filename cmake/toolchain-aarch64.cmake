@@ -10,14 +10,14 @@ set(CMAKE_CROSSCOMPILING TRUE)
 # -------------------------------------------------------------------------------
 
 if(NOT DEFINED ENV{CONDA_PREFIX})
-    message(FATAL_ERROR "CONDA_PREFIX environment variable not set. Please run via 'pixi run'.")
+  message(FATAL_ERROR "CONDA_PREFIX environment variable not set. Please run via 'pixi run'.")
 endif()
 
 set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/aarch64-conda-linux-gnu-")
 set(TOOLCHAIN_sysroot "$ENV{CONDA_PREFIX}/aarch64-conda-linux-gnu/sysroot")
 
-set(CMAKE_C_COMPILER   "${TOOLCHAIN_bin_prefix}gcc")
-set(CMAKE_STRIP        "${TOOLCHAIN_bin_prefix}strip")
+set(CMAKE_C_COMPILER "${TOOLCHAIN_bin_prefix}gcc")
+set(CMAKE_STRIP "${TOOLCHAIN_bin_prefix}strip")
 
 # -------------------------------------------------------------------------------
 # Search Policy (Sysroot Control)

@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
     printf("%d:[%s]\n", i, argv[i]);
 
   printf("==== DL_ARGV ====\n");
-  printf("&_dl_argv=%p  _dl_argv=%p\n", (void*)&_dl_argv, (void*)_dl_argv);
+  printf("&_dl_argv=%p  _dl_argv=%p\n", (void *)&_dl_argv, (void *)_dl_argv);
   for (i = 0; i < argc && _dl_argv; ++i)
     printf("%d:[%s]\n", i, _dl_argv[i]);
 
@@ -185,8 +185,8 @@ int main(int argc, char *argv[]) {
   //((struct link_map_ext *)m)->l_type = 0; // can restore dli_fname
 
   while (m) {
-    printf("base=%p type=%d l_entry=%p name=%s\n", (void*)m->l_addr, ((struct link_map_ext *)m)->l_type,
-           (void*)((struct link_map_ext *)m)->l_entry, m->l_name);
+    printf("base=%p type=%d l_entry=%p name=%s\n", (void *)m->l_addr, ((struct link_map_ext *)m)->l_type,
+           (void *)((struct link_map_ext *)m)->l_entry, m->l_name);
     m = m->l_next;
   }
 

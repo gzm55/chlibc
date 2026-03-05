@@ -59,7 +59,7 @@ build-aarch64 = [
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"
-fmt = { cmd = "", depends-on = ["lint"], env = { LEFTHOOK_EXCLUDE = "lint" } }
+fmt = { cmd = "lefthook run pre-commit --all-files --no-stage-fixed", env = { LEFTHOOK_EXCLUDE = "lint" } }
 
 [dependencies]
 lefthook = ">=1.13.1"
@@ -67,3 +67,5 @@ pre-commit-hooks = "*"
 typos = "*"
 taplo = "*"            # lint&format toml
 yamlfmt = "*"
+cmakelang = '*'
+clang-tools = "*"
