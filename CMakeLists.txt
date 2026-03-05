@@ -39,6 +39,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${target_bin_dir})
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})
 
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  # v0 is only works on x86_64
+  add_executable(chlibc-v0 src/chlibc-v0.c)
+endif()
+
 # common options
 get_property(all_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUILDSYSTEM_TARGETS)
 foreach(tgt ${all_targets})
