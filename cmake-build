@@ -163,8 +163,7 @@ configure_if_needed() (
   dir) set -- "${__b_p_or_d}" ;;
   *)
     [ -z "${CMAKE_SOURCE_DIR:-}" ] || cd -- "${CMAKE_SOURCE_DIR}" || exit $?
-    __configure_preset=$(get_cmake_config_preset_simple "$__b_p_or_d")
-    set -- --preset "${__configure_preset:-default}"
+    set -- --preset "${__b_p_or_d:-default}"
     ;;
   esac
 
@@ -181,7 +180,7 @@ configure_if_needed() (
     if [ "$__b_mode" = dir ]; then
       set -- -S "${CMAKE_SOURCE_DIR:-.}" -B "$@"
     else
-      set -- -S . "$@"
+      set -- -S . "$@" --preset "$(get_cmake_config_preset_simple "$__b_p_or_d")"
     fi
     "${CMAKE_COMMAND}" "$@"
   fi

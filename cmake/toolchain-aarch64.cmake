@@ -2,7 +2,7 @@
 # Target System Configuration
 # -------------------------------------------------------------------------------
 set(CMAKE_SYSTEM_NAME Linux) # only support Linux OS
-set(CMAKE_SYSTEM_PROCESSOR x86_64)
+set(CMAKE_SYSTEM_PROCESSOR aarch64)
 set(CMAKE_CROSSCOMPILING TRUE)
 
 # -------------------------------------------------------------------------------
@@ -13,8 +13,8 @@ if(NOT DEFINED ENV{CONDA_PREFIX})
     message(FATAL_ERROR "CONDA_PREFIX environment variable not set. Please run via 'pixi run'.")
 endif()
 
-set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/x86_64-conda-linux-gnu-")
-set(TOOLCHAIN_sysroot "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
+set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/aarch64-conda-linux-gnu-")
+set(TOOLCHAIN_sysroot "$ENV{CONDA_PREFIX}/aarch64-conda-linux-gnu/sysroot")
 
 set(CMAKE_C_COMPILER   "${TOOLCHAIN_bin_prefix}gcc")
 set(CMAKE_STRIP        "${TOOLCHAIN_bin_prefix}strip")

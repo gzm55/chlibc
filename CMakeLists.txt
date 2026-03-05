@@ -8,19 +8,20 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
-#message(STATUS "---------------------------------------")
-#message(STATUS "Global C_FLAGS: ${CMAKE_C_FLAGS}")
-#message(STATUS "Debug C_FLAGS:  ${CMAKE_C_FLAGS_DEBUG}")
-#message(STATUS "Release C_FLAGS:${CMAKE_C_FLAGS_RELEASE}")
-#message(STATUS "---------------------------------------")
-# default C_FLAGS:
-#  -march=... -mtune=...
+message(STATUS "---------------------------------------")
+message(STATUS "Global C_FLAGS: ${CMAKE_C_FLAGS}")
+message(STATUS "Debug C_FLAGS:  ${CMAKE_C_FLAGS_DEBUG}")
+message(STATUS "Release C_FLAGS:${CMAKE_C_FLAGS_RELEASE}")
+message(STATUS "---------------------------------------")
+# default C_FLAGS on x86_64/aarch64:
+#  (x86_64 only) -march=... -mtune=...
 #  -ftree-vectorize
 #  -fPIC
 #  -fstack-protector-strong
 #  -fno-plt
-#  -O2
-#  -ffunction-sections
+#  (x86_64 only) -O2
+#  (aarch64 only) -O3
+#  (x86_64 only) -ffunction-sections
 #  -pipe
 #  -isystem $CONDA_PREFIX/include
 #
@@ -28,6 +29,9 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_ARCH} -Wall -Wextra -pedantic")
 set(CMAKE_C_FLAGS_DEBUG "-g -fno-omit-frame-pointer -O0 -DENABLE_DEBUG_LOG=1")
 set(CMAKE_C_FLAGS_RELEASE "-Ofast -DNDEBUG")
+
+set(CMAKE_STRIP_FLAGS "-s")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -s")
 
 # output dir
 set(target_bin_dir "${CMAKE_BINARY_DIR}/bin")

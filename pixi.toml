@@ -10,18 +10,40 @@ version = "0.1.0"
 linux = "3.10"
 libc = { family = "glibc", version = "2.17" }
 
-[tasks]
-configure = [{task="configure-x86_64"}]
-configure-x86_64 = "cmake --preset x86_64 -S ."
-
-build = [{task="build-x86_64"}]
-build-x86_64 = [{task="build-x86_64-debug"},{task="build-x86_64-release"}]
-build-x86_64-debug = "./pixiw r ./cmake-build --preset x86_64-debug"
-build-x86_64-release = "./pixiw r ./cmake-build --preset x86_64-release"
-
-[dependencies]
+[feature.common.dependencies]
 cmake = ">=4"
 ninja = "*"
+[feature.common.tasks]
+configure-arch = "cmake --preset \"$C_ARCH\" -S ."
+build-arch = [{task="build-arch-debug"},{task="build-arch-release"}]
+build-arch-debug = "./cmake-build --preset \"$C_ARCH\"-debug"
+build-arch-release = "./cmake-build --preset \"$C_ARCH\"-release"
 
-gcc = ">=14" # support C23
-gcc_linux-64 = "*" # cross toolchain
+# cross toolchain for x86_64
+[feature.x86_64.dependencies]
+gcc_linux-64 = ">=14" # support C23
+[feature.x86_64.activation.env]
+C_ARCH = "x86_64"
+
+# cross toolchain for aarch64
+[feature.aarch64.dependencies]
+gcc_linux-aarch64 = ">=14" # support C23
+[feature.aarch64.activation.env]
+C_ARCH = "aarch64"
+
+[environments.x86-64]
+features = ["common", "x86_64"]
+no-default-feature = true
+solve-group = "x86_64"
+
+[environments.aarch64]
+features = ["common", "aarch64"]
+no-default-feature = true
+solve-group = "aarch64"
+
+[tasks]
+configure = [{task="configure-arch", environment="x86-64"},{task="configure-arch", environment="aarch64"}]
+
+build = [{task="build-x86_64"},{task="build-aarch64"}]
+build-x86_64 = [{task="build-arch-debug", environment="x86-64"},{task="build-arch-release", environment="x86-64"}]
+build-aarch64 = [{task="build-arch-debug", environment="aarch64"},{task="build-arch-release", environment="aarch64"}]

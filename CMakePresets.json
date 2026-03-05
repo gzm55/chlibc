@@ -11,6 +11,17 @@
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-x86_64.cmake",
 	"CMAKE_CONFIGURATION_TYPES": "Debug;Release"
       }
+    },
+    {
+      "name": "aarch64",
+      "displayName": "Linux aarch64 Cross-Compile",
+      "description": "Using Ninja Multi-Config with aarch64-linux toolchain",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/aarch64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-aarch64.cmake",
+	"CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+      }
     }
   ],
   "buildPresets": [
@@ -22,6 +33,16 @@
     {
       "name": "x86_64-release",
       "configurePreset": "x86_64",
+      "configuration": "Release"
+    },
+    {
+      "name": "aarch64-debug",
+      "configurePreset": "aarch64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "aarch64-release",
+      "configurePreset": "aarch64",
       "configuration": "Release"
     }
   ]
