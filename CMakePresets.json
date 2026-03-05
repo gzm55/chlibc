@@ -1,0 +1,28 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "x86_64",
+      "displayName": "Linux x86_64 Cross-Compile",
+      "description": "Using Ninja Multi-Config with x86_64-linux toolchain",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/x86_64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-x86_64.cmake",
+	"CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "x86_64-debug",
+      "configurePreset": "x86_64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "x86_64-release",
+      "configurePreset": "x86_64",
+      "configuration": "Release"
+    }
+  ]
+}

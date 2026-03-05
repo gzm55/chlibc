@@ -1,0 +1,27 @@
+[workspace]
+authors = ["James Z.M. Gao <gaozm55@gmail.com>"]
+channels = ["conda-forge"]
+name = "chlibc"
+platforms = ["linux-64", "osx-arm64"]
+version = "0.1.0"
+
+[system-requirements]
+# build on centos7
+linux = "3.10"
+libc = { family = "glibc", version = "2.17" }
+
+[tasks]
+configure = [{task="configure-x86_64"}]
+configure-x86_64 = "cmake --preset x86_64 -S ."
+
+build = [{task="build-x86_64"}]
+build-x86_64 = [{task="build-x86_64-debug"},{task="build-x86_64-release"}]
+build-x86_64-debug = "./pixiw r ./cmake-build --preset x86_64-debug"
+build-x86_64-release = "./pixiw r ./cmake-build --preset x86_64-release"
+
+[dependencies]
+cmake = ">=4"
+ninja = "*"
+
+gcc = ">=14" # support C23
+gcc_linux-64 = "*" # cross toolchain

@@ -1,3 +1,9 @@
+/build/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
 # Created by https://www.toptal.com/developers/gitignore/api/c,cmake,linux,vim,emacs,macos,ninja
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,cmake,linux,vim,emacs,macos,ninja
 
