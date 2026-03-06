@@ -9,7 +9,8 @@
       "binaryDir": "${sourceDir}/build/x86_64",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-x86_64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+        "DCMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     },
     {
@@ -20,7 +21,8 @@
       "binaryDir": "${sourceDir}/build/aarch64",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-aarch64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+        "DCMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
     }
   ],
