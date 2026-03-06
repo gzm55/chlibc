@@ -78,13 +78,13 @@ static int _log_fd() {
   static int fd = -2;
   if (-1 == fd)
     return fd;
-  else if (0 <= fd) {
+  if (0 <= fd) {
     // check tty
     if (isatty(fd)) {
       auto const ttygp = tcgetpgrp(fd);
       return (ttygp < 0 || ttygp != getpgrp()) ? -1 : fd;
-    } else
-      return fd;
+    }
+    return fd;
   }
 
   // from env
@@ -120,7 +120,9 @@ static void _log_writev(struct iovec *iov, int iovcnt) {
     return;
   if (iov) {
     const size_t fallback_n = (size_t)iovcnt <= 4 ? (size_t)iovcnt : 4;
-    struct iovec fallback_v[4];
+    struct iovec fallback_v[4] = {
+        0,
+    };
     for (size_t i = 0; i < fallback_n; ++i)
       fallback_v[i] = iov[i];
     while (0 < iovcnt) {
@@ -336,7 +338,7 @@ static bool needs_sentinel() {
   auto const fd = open(ctermid(nullptr), O_RDONLY | O_NOCTTY | O_CLOEXEC);
   if (fd < 0)
     return false;
-  auto const pid_t fg_pgrp = tcgetpgrp(fd);
+  const pid_t fg_pgrp = tcgetpgrp(fd);
   close(fd);
   return fg_pgrp != -1;
 }
@@ -535,7 +537,7 @@ static bool pids_init(const pid_t child) {
       ssize_t rb = read(fd, buf + total_read, sizeof(buf) - 1 - total_read);
       if (rb == 0)
         break;  // EOF
-      else if (rb == -1) {
+      if (rb == -1) {
         if (errno == EINTR)
           continue;  // stopped by signal
         close(fd);
@@ -604,11 +606,13 @@ static inline void pids_del(const pid_t pid) {
   if (curr)
     curr->bits &= ~_SIGBIT1(p & 31);
 }
+#if 0
 static inline bool pids_has(const pid_t pid) {
   auto const p = ((uint32_t)pid + pids_base_offset) & pids_base_mask;
   auto const curr = pids_slot_search(p >> 5, false);
   return curr && 0 != (curr->bits & _SIGBIT1(p & 31));
 }
+#endif
 static void pids_kill_all(const int sig) {
   for (uint32_t curr = 0, prev = 0; curr + 1; curr = 0 == pids[curr].next ? UINT32_C(-1) : pids[curr].next) {
     auto const slot = pids + curr;
@@ -1172,7 +1176,6 @@ static void kill9_child_and_exit(const pid_t child, const int code) {
 }
 
 static bool alloc_exec_buffer();
-static inline int f(const int i) { return i; }
 static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
   int status;
   while (true) {
@@ -1250,7 +1253,8 @@ static uint_fast32_t process_signals() {
     if (signals & _SIGBIT1(0)) {
       DEBUG(0, 0, signals, "receive kill signals");
       return signals;  // return to switch to existing loop
-    } else if (signals & _SIGBIT1(SIGSTOP)) {
+    }
+    if (signals & _SIGBIT1(SIGSTOP)) {
       // signals here should be kill-ed from user, not group-stopped
       auto const sig = __builtin_ctz(signals & _SIGBIT4(SIGTTIN, SIGTTOU, SIGTSTP, SIGCONT));
       DEBUG(0, 0, sig, "receive STOP/CONT signal");
@@ -1405,7 +1409,8 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, exec_arg_t *cons
       !exec_arg->auxv_map[AT_PHNUM] || exec_arg->auxv_map[AT_PHENT] != sizeof(Elf64_Phdr)) {
     DEBUG(pid, 0, 0, "non standard elf");
     return false;
-  } else if (exec_arg->auxv_map[AT_SECURE]) {
+  }
+  if (exec_arg->auxv_map[AT_SECURE]) {
     DEBUG(pid, 0, 0, "run with setsid");
     return false;
   }
@@ -1923,7 +1928,7 @@ static int ptrace_exiting(const uint_fast32_t signals) {
   auto sig = min_exit_signal(signals, is_kill);
   if (!sig)
     return 0;
-  else if (is_kill && ptrace_has_exitkill)
+  if (is_kill && ptrace_has_exitkill)
     return 128 + sig;
 
   pids_kill_all(is_kill ? SIGKILL : SIGTERM);
@@ -1963,7 +1968,7 @@ static int ptrace_exiting(const uint_fast32_t signals) {
 
   if (ptrace_has_exitkill)
     return 128 + sig;
-  else if (!is_kill)
+  if (!is_kill)
     pids_kill_all(SIGKILL);  // promote signals
 
   // force exiting loop
@@ -1992,7 +1997,8 @@ int main(const int argc, char *const argv[]) {
   auto exit_code = 1;
   if (argc < 1 || !argv || !argv[0] || !argv[0][0]) {
     return 64;
-  } else if (1 == argc) {
+  }
+  if (1 == argc) {
     _OK_CALL(printf("Usage: %s <cmd> [argv...]\n", *argv), _ > 0);
     return 0;
   }

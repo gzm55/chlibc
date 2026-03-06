@@ -13,8 +13,9 @@ if(NOT DEFINED ENV{CONDA_PREFIX})
   message(FATAL_ERROR "CONDA_PREFIX environment variable not set. Please run via 'pixi run'.")
 endif()
 
-set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/x86_64-conda-linux-gnu-")
-set(TOOLCHAIN_sysroot "$ENV{CONDA_PREFIX}/x86_64-conda-linux-gnu/sysroot")
+set(CMAKE_C_COMPILER_TARGET x86_64-conda-linux-gnu)
+set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/${CMAKE_C_COMPILER_TARGET}/sysroot")
+set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/${CMAKE_C_COMPILER_TARGET}-")
 
 set(CMAKE_C_COMPILER "${TOOLCHAIN_bin_prefix}gcc")
 set(CMAKE_STRIP "${TOOLCHAIN_bin_prefix}strip")
@@ -24,7 +25,7 @@ set(CMAKE_STRIP "${TOOLCHAIN_bin_prefix}strip")
 # -------------------------------------------------------------------------------
 
 # find header/lib/package under the conda prefix
-set(CMAKE_FIND_ROOT_PATH "${TOOLCHAIN_sysroot}" "$ENV{CONDA_PREFIX}")
+set(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}" "$ENV{CONDA_PREFIX}")
 
 # do not depends on the header/lib on host
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
@@ -37,4 +38,4 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 # -------------------------------------------------------------------------------
 
 set(C_FLAGS_ARCH "")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath-link,${TOOLCHAIN_sysroot}/lib")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath-link,${CMAKE_SYSROOT}/lib")

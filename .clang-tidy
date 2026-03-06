@@ -1,0 +1,16 @@
+---
+Checks: |
+  readability-else-after-return,
+  readability-simplify-boolean-expr
+
+  # checked in gcc
+  #bugprone-sizeof-expression,
+  #bugprone-suspicious-semicolon,
+  #bugprone-unused-raii,
+
+  #readability-braces-around-statements,
+  #clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+
+ExtraArgsBefore:
+  - -Wno-unknown-argument
+  - -Wno-unknown-warning-option

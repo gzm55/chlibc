@@ -8,21 +8,29 @@ set(CMAKE_C_EXTENSIONS OFF)
 
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
-message(STATUS "---------------------------------------")
-message(STATUS "Global C_FLAGS: ${CMAKE_C_FLAGS}")
-message(STATUS "Debug C_FLAGS:  ${CMAKE_C_FLAGS_DEBUG}")
-message(STATUS "Release C_FLAGS:${CMAKE_C_FLAGS_RELEASE}")
-message(STATUS "---------------------------------------")
+# message(STATUS "---------------------------------------") message(STATUS "Global C_FLAGS: ${CMAKE_C_FLAGS}")
+# message(STATUS "Debug C_FLAGS:  ${CMAKE_C_FLAGS_DEBUG}") message(STATUS "Release C_FLAGS:${CMAKE_C_FLAGS_RELEASE}")
+# message(STATUS "---------------------------------------")
+#
 # default C_FLAGS on x86_64/aarch64: (x86_64 only):-march=... -mtune=... -ftree-vectorize -fPIC -fstack-protector-strong
 # -fno-plt (x86_64 only):-O2 (aarch64 only):-O3 (x86_64 only):-ffunction-sections -pipe -isystem $CONDA_PREFIX/include
 #
 # final options: CMAKE_C_FLAGS CMAKE_C_FLAGS_<CONFIG> target_compile_options
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_ARCH} -Wall -Wextra -pedantic")
-set(CMAKE_C_FLAGS_DEBUG "-g -fno-omit-frame-pointer -O0 -DENABLE_DEBUG_LOG=1")
-set(CMAKE_C_FLAGS_RELEASE "-Ofast -DNDEBUG")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_ARCH}") # append options for each arch, like mtune
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic") # append common warning options
+set(CMAKE_C_FLAGS
+    "${CMAKE_C_FLAGS} -Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer")
 
+set(CMAKE_C_FLAGS_DEBUG "-g -fno-omit-frame-pointer -O0 -DENABLE_DEBUG_LOG=1")
+set(CMAKE_C_FLAGS_RELEASE "-O3 -ffast-math -DNDEBUG")
+
+# enable strip for release
 set(CMAKE_STRIP_FLAGS "-s")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -s")
+
+# enable clang-tidy in default conda env
+set(CMAKE_C_CLANG_TIDY "${CMAKE_CURRENT_SOURCE_DIR}/clang-tidy-fix-arg" clang-tidy
+                       "--extra-arg-before=--target=${CMAKE_C_COMPILER_TARGET}")
 
 # output dir
 set(_target_bin_dir "${CMAKE_BINARY_DIR}/bin")

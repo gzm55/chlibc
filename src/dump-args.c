@@ -13,10 +13,10 @@
 static const char *get_owner(void *addr, Dl_info *info) {
   if (addr == nullptr)
     return "(null)";
-  else if (dladdr(addr, info))
+  if (dladdr(addr, info))
     return info->dli_fname;
-  else
-    return "(unknown)";
+
+  return "(unknown)";
 }
 
 struct r_scope_elem {

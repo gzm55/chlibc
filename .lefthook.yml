@@ -54,7 +54,7 @@ pre-commit:
             run: taplo fmt {staged_files}
             stage_fixed: true
     - name: For yaml files
-      glob: "{*.yml,*.yaml,.clang-format}"
+      glob: "{*.yml,*.yaml,.clang-format,.clang-tidy}"
       group:
         piped: true
         jobs:
@@ -64,7 +64,7 @@ pre-commit:
             run: check-yaml {staged_files}
           - name: Check multi-doc YAML
             tags: [lint]
-            exclude: "*.{yml,yaml}"
+            exclude: "{*.yml,*.yaml,.clang-tidy}"
             run: check-yaml --allow-multiple-documents {staged_files}
           - name: Format YAML files
             run: yamlfmt {staged_files}
