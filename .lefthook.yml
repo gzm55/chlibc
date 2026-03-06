@@ -69,6 +69,19 @@ pre-commit:
           - name: Format YAML files
             run: yamlfmt {staged_files}
             stage_fixed: true
+    - name: For json files
+      glob: "*.json"
+      group:
+        piped: true
+        jobs:
+          - name: Validate json files
+            tags: [lint]
+            run: check-json {staged_files}
+          - name: Format json files
+            # when fixing, always return non-0, fix twice to return 0
+            run: pretty-format-json --autofix --no-sort-keys {staged_files} || pretty-format-json --autofix --no-sort-keys
+              {staged_files}
+            stage_fixed: true
     - name: For cmake files
       glob: "{CMakeLists.txt,*.cmake}"
       group:
