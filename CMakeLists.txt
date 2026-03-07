@@ -18,19 +18,25 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 # final options: CMAKE_C_FLAGS CMAKE_C_FLAGS_<CONFIG> target_compile_options
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_ARCH}") # append options for each arch, like mtune
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic") # append common warning options
-set(CMAKE_C_FLAGS
-    "${CMAKE_C_FLAGS} -Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer")
+
+if(CMAKE_C_COMPILER_ID MATCHES "Clang") # also matches AppleClang
+  set(CMAKE_C_CLANG_TIDY clang-tidy)
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  set(CMAKE_C_FLAGS
+      "${CMAKE_C_FLAGS} -Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer")
+else()
+  message(FATAL_ERROR, "Unsupported compiler: ${CMAKE_C_COMPILER_ID}.")
+endif()
 
 set(CMAKE_C_FLAGS_DEBUG "-g -fno-omit-frame-pointer -O0 -DENABLE_DEBUG_LOG=1")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -ffast-math -DNDEBUG")
 
 # enable strip for release
 set(CMAKE_STRIP_FLAGS "-s")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--hash-style=both")
 set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -s")
 
 # enable clang-tidy in default conda env
-set(CMAKE_C_CLANG_TIDY "${CMAKE_CURRENT_SOURCE_DIR}/clang-tidy-fix-arg" clang-tidy
-                       "--extra-arg-before=--target=${CMAKE_C_COMPILER_TARGET}")
 
 # output dir
 set(_target_bin_dir "${CMAKE_BINARY_DIR}/bin")
@@ -39,6 +45,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${_target_bin_dir})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${_target_bin_dir})
 
 # targets
+add_executable(chlibc src/chlibc.c)
+
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})
 

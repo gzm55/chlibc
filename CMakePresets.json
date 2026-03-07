@@ -2,49 +2,63 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "x86_64",
-      "displayName": "Linux x86_64 Cross-Compile",
+      "name": "clang-x86_64",
+      "displayName": "Linux x86_64 Cross-Compile (Clang)",
       "description": "Using Ninja Multi-Config with x86_64-linux toolchain",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/x86_64",
+      "binaryDir": "${sourceDir}/build/clang-x86_64",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-x86_64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-clang-x86_64.cmake",
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
       }
     },
     {
-      "name": "aarch64",
-      "displayName": "Linux aarch64 Cross-Compile",
+      "name": "clang-aarch64",
+      "displayName": "Linux aarch64 Cross-Compile (Clang)",
       "description": "Using Ninja Multi-Config with aarch64-linux toolchain",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/aarch64",
+      "binaryDir": "${sourceDir}/build/clang-aarch64",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-aarch64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-clang-aarch64.cmake",
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+      }
+    },
+    {
+      "name": "gcc-x86_64",
+      "displayName": "Linux x86_64 Cross-Compile (GCC)",
+      "description": "Using Ninja Multi-Config with x86_64-linux toolchain",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/gcc-x86_64",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-gcc-x86_64.cmake",
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "x86_64-debug",
-      "configurePreset": "x86_64",
+      "name": "clang-x86_64-debug",
+      "configurePreset": "clang-x86_64",
       "configuration": "Debug"
     },
     {
-      "name": "x86_64-release",
-      "configurePreset": "x86_64",
+      "name": "clang-x86_64-release",
+      "configurePreset": "clang-x86_64",
       "configuration": "Release"
     },
     {
-      "name": "aarch64-debug",
-      "configurePreset": "aarch64",
+      "name": "clang-aarch64-debug",
+      "configurePreset": "clang-aarch64",
       "configuration": "Debug"
     },
     {
-      "name": "aarch64-release",
-      "configurePreset": "aarch64",
+      "name": "clang-aarch64-release",
+      "configurePreset": "clang-aarch64",
+      "configuration": "Release"
+    },
+    {
+      "name": "gcc-x86_64-release",
+      "configurePreset": "gcc-x86_64",
       "configuration": "Release"
     }
   ]

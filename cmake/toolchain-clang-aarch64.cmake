@@ -15,10 +15,9 @@ endif()
 
 set(CMAKE_C_COMPILER_TARGET aarch64-conda-linux-gnu)
 set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/${CMAKE_C_COMPILER_TARGET}/sysroot")
-set(TOOLCHAIN_bin_prefix "$ENV{CONDA_PREFIX}/bin/${CMAKE_C_COMPILER_TARGET}-")
 
-set(CMAKE_C_COMPILER "${TOOLCHAIN_bin_prefix}gcc")
-set(CMAKE_STRIP "${TOOLCHAIN_bin_prefix}strip")
+set(CMAKE_C_COMPILER "clang")
+set(CMAKE_STRIP "strip")
 
 # -------------------------------------------------------------------------------
 # Search Policy (Sysroot Control)
@@ -37,5 +36,5 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 # Flags Optimization
 # -------------------------------------------------------------------------------
 
-set(C_FLAGS_ARCH "")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath-link,${CMAKE_SYSROOT}/lib")
+set(C_FLAGS_ARCH "-march=armv8.2-a -mtune=neoverse-n1")
+set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld --rtlib=compiler-rt")

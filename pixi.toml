@@ -10,63 +10,64 @@ version = "0.1.0"
 linux = "3.10"
 libc = { family = "glibc", version = "2.17" }
 
-[feature.common.dependencies]
+# cross toolchain for gcc-x86_64
+[feature.gcc-x86_64.dependencies]
 cmake = ">=4"
 ninja = "*"
-clang-tools = "*"
-[feature.common.tasks]
-_configure-arch = "cmake --preset \"$C_ARCH\" -S ."
-_build-arch = [{ task = "build-arch-debug" }, { task = "build-arch-release" }]
-_build-arch-debug = "./cmake-build --preset \"$C_ARCH\"-debug"
-_build-arch-release = "./cmake-build --preset \"$C_ARCH\"-release"
-
-# cross toolchain for x86_64
-[feature.x86_64.dependencies]
 gcc_linux-64 = ">=14" # support C23
-[feature.x86_64.activation.env]
-C_ARCH = "x86_64"
+[feature.gcc-x86_64.tasks]
+_configure-gcc-x86_64 = "cmake --preset gcc-x86_64 -S ."
+_build-gcc-x86_64-release = "./cmake-build --preset gcc-x86_64-release"
 
-# cross toolchain for aarch64
-[feature.aarch64.dependencies]
-gcc_linux-aarch64 = ">=14" # support C23
-[feature.aarch64.activation.env]
-C_ARCH = "aarch64"
-
-[environments.x86-64]
-features = ["common", "x86_64"]
+[environments.gcc-x86-64]
+features = ["gcc-x86_64"]
 no-default-feature = true
-solve-group = "x86_64"
-
-[environments.aarch64]
-features = ["common", "aarch64"]
-no-default-feature = true
-solve-group = "aarch64"
+solve-group = "gcc-x86_64"
 
 [tasks]
 configure = [
-  { task = "_configure-arch", environment = "x86-64" },
-  { task = "_configure-arch", environment = "aarch64" },
+  { task = "_configure-clang-x86_64" },
+  { task = "_configure-clang-aarch64" },
+  { task = "_configure-gcc-x86_64", environment = "x86-64" },
 ]
-
 build = [{ task = "build-x86_64" }, { task = "build-aarch64" }]
+
+_configure-clang-x86_64 = "cmake --preset clang-x86_64 -S ."
+_configure-clang-aarch64 = "cmake --preset clang-aarch64 -S ."
+
 build-x86_64 = [
-  { task = "_build-arch-debug", environment = "x86-64" },
-  { task = "_build-arch-release", environment = "x86-64" },
+  { task = "_build-clang-x86_64-release" },
+  { task = "_build-clang-x86_64-debug" },
+  { task = "_build-gcc-x86_64-release", environment = "x86_64" },
 ]
 build-aarch64 = [
-  { task = "_build-arch-debug", environment = "aarch64" },
-  { task = "_build-arch-release", environment = "aarch64" },
+  { task = "_build-clang-aarch64-release" },
+  { task = "_build-clang-aarch64-debug" },
 ]
+
+_build-clang-x86_64-release = "./cmake-build --preset clang-x86_64-release"
+_build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
+_build-clang-aarch64-release = "./cmake-build --preset clang-aarch64-release"
+_build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"
 fmt = { cmd = "lefthook run pre-commit --all-files --no-stage-fixed", env = { LEFTHOOK_EXCLUDE = "lint" } }
 
 [dependencies]
+cmake = ">=4"
+ninja = "*"
+clang = ">=18"                  # support C23
+compiler-rt_linux-64 = "*"
+compiler-rt_linux-aarch64 = "*"
+lld = "*"
+cmakelang = '*'
+sysroot_linux-aarch64 = "*"
+sysroot_linux-64 = "*"
+
 lefthook = ">=1.13.1"
 pre-commit-hooks = "*"
 typos = "*"
 taplo = "*"            # lint&format toml
 yamlfmt = "*"
-cmakelang = '*'
 clang-tools = "*"
