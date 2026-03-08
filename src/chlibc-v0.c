@@ -5,7 +5,7 @@
 #define _GNU_SOURCE  // REG_RIP macro needs GNU source
 
 #ifndef __x86_64__
-#error "handle_exec now requires an x86_64 (x64) architecture. Compilation aborted."
+#  error "handle_exec now requires an x86_64 (x64) architecture. Compilation aborted."
 // the registers, stack layout, and some ptrace() behavior is based on x64 Linux >= 2.6.18
 // and should be able to adopted to aarch64 Linux >= 3.19 in the future
 #endif
@@ -40,7 +40,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 #ifndef PTRACE_O_EXITKILL
-#include <linux/ptrace.h>
+#  include <linux/ptrace.h>
 #endif
 
 __asm__(".symver memcpy, memcpy@GLIBC_2.2.5");
@@ -182,13 +182,13 @@ static void _log_error(char *const file, const int flen, char *const fmt, ...) {
   } while (0)
 
 #ifdef ENABLE_DEBUG_LOG
-#define DEBUG(pid, event, sig, msg)                                                                         \
-  do {                                                                                                      \
-    errno = 0;                                                                                              \
-    _log_error(__FILE__, strlen(__FILE__), ":%d [c=%d][ev=%d][sig=%d] %s", __LINE__, pid, event, sig, msg); \
-  } while (0)
+#  define DEBUG(pid, event, sig, msg)                                                                         \
+    do {                                                                                                      \
+      errno = 0;                                                                                              \
+      _log_error(__FILE__, strlen(__FILE__), ":%d [c=%d][ev=%d][sig=%d] %s", __LINE__, pid, event, sig, msg); \
+    } while (0)
 #else  // ENABLE_DEBUG_LOG
-#define DEBUG(...) ((void)0)
+#  define DEBUG(...) ((void)0)
 #endif  // ENABLE_DEBUG_LOG
 
 ////////// API check Functions ////////////
@@ -299,7 +299,7 @@ static void tracer_sigaction_handler(const int sig, siginfo_t *const info, void 
   if (sig_core_name(sig) && info->si_code > 0) {
     // self blocking signal, exit immediately
 #ifndef __x86_64__
-#error "This base requires an x86_64 (x64) architecture. Compilation aborted."
+#  error "This base requires an x86_64 (x64) architecture. Compilation aborted."
 #endif
     atomic_store_explicit(&sig_crash_ip, (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.gregs[REG_RIP]),
                           memory_order_relaxed);

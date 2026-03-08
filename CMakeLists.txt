@@ -46,6 +46,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${_target_bin_dir})
 
 # targets
 add_executable(chlibc src/chlibc.c)
+target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # elable GNU extension header features
 
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})

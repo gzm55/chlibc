@@ -27,6 +27,7 @@ AlignAfterOpenBracket: Align
 BreakConstructorInitializers: BeforeComma
 PackConstructorInitializers: Never
 IndentCaseLabels: false
+IndentPPDirectives: AfterHash
 
 #inherit from base
 #AlignEscapedNewlines
