@@ -1,2 +1,4 @@
 ---
-line_width: 120
+format:
+  line_width: 120
+  max_pargs_hwrap: 10

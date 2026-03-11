@@ -69,5 +69,4 @@
 #  include <linux/ptrace.h>
 #endif
 
-
 int main() { return 0; }

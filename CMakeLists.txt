@@ -1,59 +1,95 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 4.2) # use new set/unset(CACHE{KEY}...) feature
+message(VERBOSE "Processing ${CMAKE_CURRENT_LIST_FILE}")
+
+# default toolchain and hook path
+set(CMAKE_TOOLCHAIN_FILE
+    "${CMAKE_SOURCE_DIR}/cmake/toolchain/clang-x86_64.cmake"
+    CACHE TYPE FILEPATH)
+set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES
+    "${CMAKE_SOURCE_DIR}/cmake/toolchain/top-include.cmake"
+    CACHE TYPE FILEPATH)
+
 project(chlibc C)
+
+# output dir
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
 
 # global options
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-
 set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
-# message(STATUS "---------------------------------------") message(STATUS "Global C_FLAGS: ${CMAKE_C_FLAGS}")
-# message(STATUS "Debug C_FLAGS:  ${CMAKE_C_FLAGS_DEBUG}") message(STATUS "Release C_FLAGS:${CMAKE_C_FLAGS_RELEASE}")
-# message(STATUS "---------------------------------------")
-#
-# default C_FLAGS on x86_64/aarch64: (x86_64 only):-march=... -mtune=... -ftree-vectorize -fPIC -fstack-protector-strong
-# -fno-plt (x86_64 only):-O2 (aarch64 only):-O3 (x86_64 only):-ffunction-sections -pipe -isystem $CONDA_PREFIX/include
-#
-# final options: CMAKE_C_FLAGS CMAKE_C_FLAGS_<CONFIG> target_compile_options
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS_ARCH}") # append options for each arch, like mtune
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -pedantic") # append common warning options
+add_compile_options(-D__MAIN_ADD_C_FLAGS) # markers
 
+# enable more warnings and lint
+add_compile_options(-Wall -Wextra -pedantic) # common warning options
 if(CMAKE_C_COMPILER_ID MATCHES "Clang") # also matches AppleClang
   set(CMAKE_C_CLANG_TIDY clang-tidy)
-elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-  set(CMAKE_C_FLAGS
-      "${CMAKE_C_FLAGS} -Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer")
+elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
+  add_compile_options(-Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer)
 else()
   message(FATAL_ERROR, "Unsupported compiler: ${CMAKE_C_COMPILER_ID}.")
 endif()
 
-set(CMAKE_C_FLAGS_DEBUG "-g -fno-omit-frame-pointer -O0 -DENABLE_DEBUG_LOG=1")
-set(CMAKE_C_FLAGS_RELEASE "-O3 -ffast-math -DNDEBUG")
+# visibility
+add_compile_options(-fvisibility=hidden)
+
+# disable PIE for old OS on x86_64
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  add_compile_options(-fno-PIC -fno-PIE -fno-stack-protector)
+  # -fno-builtin
+endif()
+
+add_compile_options(-U__MAIN_ADD_C_FLAGS)
+
+# debug/release options
+add_compile_options(-D__CONFIG_ADD_C_FLAGS)
+add_compile_options($<$<CONFIG:Debug>:-g>)
+add_compile_options($<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
+add_compile_options($<$<CONFIG:Debug>:-O0>)
+add_compile_options($<$<CONFIG:Debug>:-DENABLE_DEBUG_LOG=1>)
+add_compile_options($<$<CONFIG:Release>:-ffast-math>)
+add_compile_options(-U__CONFIG_ADD_C_FLAGS)
+
+add_link_options(-D__MAIN_ADD_L_FLAGS)
 
 # enable strip for release
-set(CMAKE_STRIP_FLAGS "-s")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--hash-style=both")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -s")
+add_link_options($<$<CONFIG:Release>:-s>)
 
-# enable clang-tidy in default conda env
+# disable PIE for old OS on x86_64
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  add_link_options(-no-pie LINKER:--hash-style=both LINKER:-z,lazy)
+endif()
 
-# output dir
-set(_target_bin_dir "${CMAKE_BINARY_DIR}/bin")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${_target_bin_dir})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${_target_bin_dir})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${_target_bin_dir})
+add_link_options(-U__MAIN_ADD_L_FLAGS)
 
 # targets
 add_executable(chlibc src/chlibc.c)
 target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # elable GNU extension header features
+add_custom_command(
+  TARGET chlibc
+  POST_BUILD
+  COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag $<TARGET_FILE:chlibc>
+  COMMENT "Stripping .note.ABI-tag section from $<TARGET_FILE_NAME:chlibc>..."
+  VERBATIM)
 
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})
 
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  # v0 is only works on x86_64
+  # v0 only works on x86_64
   add_executable(chlibc-v0 src/chlibc-v0.c)
+
+  # disable kernel startup checking
+  add_custom_command(
+    TARGET chlibc-v0
+    POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag $<TARGET_FILE:chlibc-v0>
+    COMMENT "Stripping .note.ABI-tag section from $<TARGET_FILE_NAME:chlibc-v0>..."
+    VERBATIM)
 endif()
 
 # common options

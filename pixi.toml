@@ -12,7 +12,7 @@ libc = { family = "glibc", version = "2.17" }
 
 # cross toolchain for gcc-x86_64
 [feature.gcc-x86_64.dependencies]
-cmake = ">=4"
+cmake = ">=4.2"
 ninja = "*"
 gcc_linux-64 = ">=14" # support C23
 [feature.gcc-x86_64.tasks]
@@ -55,7 +55,7 @@ lint = "lefthook run pre-commit --all-files --no-stage-fixed"
 fmt = { cmd = "lefthook run pre-commit --all-files --no-stage-fixed", env = { LEFTHOOK_EXCLUDE = "lint" } }
 
 [dependencies]
-cmake = ">=4"
+cmake = ">=4.2"
 ninja = "*"
 clang = ">=18"                  # support C23
 compiler-rt_linux-64 = "*"

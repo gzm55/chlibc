@@ -1,38 +1,43 @@
 {
-  "version": 6,
+  "version": 10,
+  "$comment": "$comment requires version 10",
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 2,
+    "patch": 0
+  },
   "configurePresets": [
     {
-      "name": "clang-x86_64",
-      "displayName": "Linux x86_64 Cross-Compile (Clang)",
-      "description": "Using Ninja Multi-Config with x86_64-linux toolchain",
+      "name": "base",
+      "hidden": true,
+      "description": "common configurations",
       "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/clang-x86_64",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/toolchain/${presetName}.cmake",
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-clang-x86_64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "${sourceDir}/cmake/top-include.cmake"
       }
+    },
+    {
+      "name": "clang-x86_64",
+      "displayName": "Linux Cross-Compile for ${presetName}",
+      "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
+      "inherits": "base"
     },
     {
       "name": "clang-aarch64",
-      "displayName": "Linux aarch64 Cross-Compile (Clang)",
-      "description": "Using Ninja Multi-Config with aarch64-linux toolchain",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/clang-aarch64",
-      "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-clang-aarch64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
-      }
+      "displayName": "Linux Cross-Compile for ${presetName}",
+      "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
+      "inherits": "base"
     },
     {
       "name": "gcc-x86_64",
-      "displayName": "Linux x86_64 Cross-Compile (GCC)",
-      "description": "Using Ninja Multi-Config with x86_64-linux toolchain",
-      "generator": "Ninja Multi-Config",
-      "binaryDir": "${sourceDir}/build/gcc-x86_64",
-      "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/toolchain-gcc-x86_64.cmake",
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
-      }
+      "displayName": "Linux Cross-Compile for ${presetName}",
+      "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
+      "inherits": "base",
+      "$comment": "now only for checking the compatibility of gcc"
     }
   ],
   "buildPresets": [
