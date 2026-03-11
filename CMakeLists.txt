@@ -4,10 +4,10 @@ message(VERBOSE "Processing ${CMAKE_CURRENT_LIST_FILE}")
 # default toolchain and hook path
 set(CMAKE_TOOLCHAIN_FILE
     "${CMAKE_SOURCE_DIR}/cmake/toolchain/clang-x86_64.cmake"
-    CACHE TYPE FILEPATH)
+    CACHE FILEPATH "")
 set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES
     "${CMAKE_SOURCE_DIR}/cmake/toolchain/top-include.cmake"
-    CACHE TYPE FILEPATH)
+    CACHE FILEPATH "")
 
 project(chlibc C)
 
@@ -69,11 +69,20 @@ add_link_options(-U__MAIN_ADD_L_FLAGS)
 # targets
 add_executable(chlibc src/chlibc.c)
 target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # elable GNU extension header features
+# disable kernel startup checking
 add_custom_command(
   TARGET chlibc
   POST_BUILD
   COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag $<TARGET_FILE:chlibc>
   COMMENT "Stripping .note.ABI-tag section from $<TARGET_FILE_NAME:chlibc>..."
+  VERBATIM)
+# checking target elf
+add_custom_command(
+  TARGET chlibc
+  POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/elf_release_audit.sh"
+          "$<TARGET_FILE:chlibc>"
+  COMMENT "Checking $<TARGET_FILE_NAME:chlibc>..."
   VERBATIM)
 
 add_executable(dump-args src/dump-args.c)
@@ -87,8 +96,17 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   add_custom_command(
     TARGET chlibc-v0
     POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag $<TARGET_FILE:chlibc-v0>
+    COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag "$<TARGET_FILE:chlibc-v0>"
     COMMENT "Stripping .note.ABI-tag section from $<TARGET_FILE_NAME:chlibc-v0>..."
+    VERBATIM)
+
+  # checking target elf
+  add_custom_command(
+    TARGET chlibc
+    POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/elf_release_audit.sh"
+            "$<TARGET_FILE:chlibc>"
+    COMMENT "Checking $<TARGET_FILE_NAME:chlibc>..."
     VERBATIM)
 endif()
 

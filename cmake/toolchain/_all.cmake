@@ -34,7 +34,8 @@ else()
 endif()
 
 set(CMAKE_C_COMPILER "${_toolchain_bin_prefix}${_cc}")
-set(CMAKE_OBJCOPY "${_toolchain_tool_prefix}strip")
+set(CMAKE_OBJCOPY "${_toolchain_tool_prefix}objcopy")
+set(CMAKE_READELF "${_toolchain_tool_prefix}readelf")
 
 # Search Policy (Sysroot Control)
 
