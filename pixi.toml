@@ -45,9 +45,9 @@ build-aarch64 = [
   { task = "_build-clang-aarch64-debug" },
 ]
 
-_build-clang-x86_64-release = "./cmake-build --preset clang-x86_64-release"
+_build-clang-x86_64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-x86_64-release"
 _build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
-_build-clang-aarch64-release = "./cmake-build --preset clang-aarch64-release"
+_build-clang-aarch64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-aarch64-release"
 _build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
 
 pre-commit-install = "lefthook install"

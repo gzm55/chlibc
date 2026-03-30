@@ -11,6 +11,7 @@ if("C" IN_LIST _langs)
 
     add_compile_options(-march=armv8.2-a)
     add_compile_options(-mtune=neoverse-n1)
+    add_compile_options(-mbranch-protection=bti) # enable BTI
 
     add_compile_options(-U__POST_PRJ_ADD_C_FLAGS)
   elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
@@ -19,6 +20,7 @@ if("C" IN_LIST _langs)
 
       add_compile_options(-march=x86-64)
       add_compile_options(-mtune=haswell)
+      add_compile_options(-fcf-protection=full) # enable CET
 
       add_compile_options(-U__POST_PRJ_ADD_C_FLAGS)
     else()

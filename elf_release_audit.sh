@@ -1,5 +1,5 @@
 #!/bin/sh
-# usage: elf_audit.sh <path>
+# usage: elf_release_audit.sh <path>
 
 TARGET="${1:?usage: elf_audit.sh <path>}"
 : "${READELF_BIN:=readelf}"
@@ -53,8 +53,6 @@ if $NO_IFUNC; then
     log_error "Found IFUNC functions"
   fi
 fi
-
-# TODO Check RPATH/RUNPATH
 
 if [ "$EXIT_STATUS" -ne 0 ]; then
   printf "[ERROR] %s breaks some limits:%s\n" "$TARGET" "$ERRORS"

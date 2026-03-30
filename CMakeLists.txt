@@ -40,13 +40,20 @@ else()
 endif()
 
 # visibility
-add_compile_options(-fvisibility=hidden)
+set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 
 # disable PIE for old OS on x86_64
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   add_compile_options(-fno-PIC -fno-PIE -fno-stack-protector)
-  # -fno-builtin
 endif()
+
+add_compile_options(-fno-stack-protector)
+
+# reproducible build
+add_compile_options("-fno-ident") # no .comment section
+add_compile_options("-frandom-seed=chlibc_fixed_seed")
+add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}=.")
 
 add_compile_options(-U__MAIN_ADD_C_FLAGS)
 
@@ -56,8 +63,10 @@ add_compile_options($<$<CONFIG:Debug>:-g>)
 add_compile_options($<$<CONFIG:Debug>:-fno-omit-frame-pointer>)
 add_compile_options($<$<CONFIG:Debug>:-O0>)
 add_compile_options($<$<CONFIG:Debug>:-DENABLE_DEBUG_LOG=1>)
-add_compile_options($<$<CONFIG:Release>:-ffast-math>)
 add_compile_options(-U__CONFIG_ADD_C_FLAGS)
+
+# reproducible build
+add_link_options("-Wl,--build-id=sha1")
 
 add_link_options(-D__MAIN_ADD_L_FLAGS)
 
@@ -72,8 +81,41 @@ endif()
 add_link_options(-U__MAIN_ADD_L_FLAGS)
 
 # targets
+add_library(chlibc-loader OBJECT src/loader.c src/loader-${CMAKE_SYSTEM_PROCESSOR}.c)
+target_compile_definitions(chlibc-loader PRIVATE _GNU_SOURCE) # enable GNU features, like MAP_ANONYMOUS
+set_target_properties(chlibc-loader PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_options(
+  chlibc-loader
+  PRIVATE -fPIE
+          -ffreestanding # no stdlib
+          -fno-stack-protector # no __stack_chk_fail
+          -fno-unwind-tables # no unwind tables
+          -fno-asynchronous-unwind-tables
+          -fno-plt # not PLT
+)
+
 add_executable(chlibc src/chlibc.c)
-target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # elable GNU extension header features
+target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # enable GNU extension header features
+target_link_libraries(chlibc PUBLIC chlibc-loader)
+add_custom_command(
+  TARGET chlibc
+  PRE_LINK
+  COMMAND "${CMAKE_LINKER}" -r -o "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/$<CONFIG>/loader-linked.o"
+          $<TARGET_OBJECTS:chlibc-loader>
+  COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/loader_audit.sh"
+          "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/$<CONFIG>/loader-linked.o"
+  COMMENT "Checking loader objects ..."
+  COMMAND_EXPAND_LISTS VERBATIM)
+# process linker script
+add_custom_command(
+  TARGET chlibc
+  PRE_LINK
+  COMMAND ${CMAKE_C_COMPILER} -E -x c ${CMAKE_C_PP_FLAGS} -P ${CMAKE_CURRENT_SOURCE_DIR}/src/loader.ld.S -o
+          ${CMAKE_CURRENT_BINARY_DIR}/loader.ld
+  COMMENT "Generating the loader linker script ..."
+  VERBATIM)
+target_link_options(chlibc PRIVATE -T ${CMAKE_CURRENT_BINARY_DIR}/loader.ld)
+
 # disable kernel startup checking
 add_custom_command(
   TARGET chlibc
@@ -107,7 +149,7 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
 
   # checking target elf
   add_custom_command(
-    TARGET chlibc
+    TARGET chlibc-v0
     POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/elf_release_audit.sh"
             "$<TARGET_FILE:chlibc>"

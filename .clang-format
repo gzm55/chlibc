@@ -29,6 +29,8 @@ PackConstructorInitializers: Never
 IndentCaseLabels: false
 IndentPPDirectives: AfterHash
 
+StatementMacros: ["_Pragma", "LOADER_SECTION"]
+
 #inherit from base
 #AlignEscapedNewlines
 #AllowAllArgumentsOnNextLine

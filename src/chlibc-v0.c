@@ -1347,7 +1347,6 @@ static bool alloc_exec_buffer() {
   return true;
 }
 
-// uint64_t argv0);
 typedef struct {
   uint64_t rsp;
   uint64_t argc;
