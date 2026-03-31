@@ -911,7 +911,8 @@ static inline int make_prot(const int p_flags) {
 
 // parse and generate the mmap() plan of an interp elf
 // ref: load_elf_interp() in https://github.com/torvalds/linux/blob/master/fs/binfmt_elf.c
-static bool init_elf_info(const char *const path, const char *const libc_dir, elf_info_t *const info) {
+static bool init_elf_info(const char *const path, const char *const libc_dir, elf_info_t *const info,
+                          const bool must_static) {
   bool rst = false;
   if (!path)
     goto DONE;
@@ -955,7 +956,7 @@ static bool init_elf_info(const char *const path, const char *const libc_dir, el
 
   // parse all loadable segments
   for (int i = 0; i < ehdr->e_phnum; ++i) {
-    if (PT_INTERP == phdr[i].p_type)
+    if (PT_INTERP == phdr[i].p_type && must_static)
       goto UNMAP_DONE;  // interp must be static linked
 
     if (PT_LOAD != phdr[i].p_type)
@@ -2187,15 +2188,15 @@ int main(const int argc, char *const argv[]) {
     ERR("fail to init system config");
     return 65;
   }
-  if (!init_elf_info("/proc/self/exe", nullptr, &chlibc_info) || !init_loader_info()) {
+  if (!init_elf_info("/proc/self/exe", nullptr, &chlibc_info, false) || !init_loader_info()) {
     ERR("fail to init chlibc elf or loader info");
     return 66;
   }
-  if (!init_elf_info(find_target_interp_path(), find_target_libc_dir(), &target_interp) || !init_chlibc_root()) {
+  if (!init_elf_info(find_target_interp_path(), find_target_libc_dir(), &target_interp, true) || !init_chlibc_root()) {
     ERR("fail to init target interp info");
     return 65;
   }
-  if (!init_elf_info(SYS_INTERP_PATH, nullptr, &system_interp)) {
+  if (!init_elf_info(SYS_INTERP_PATH, nullptr, &system_interp, true)) {
     ERR("fail to init system interp info");
     return 65;
   }

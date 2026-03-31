@@ -66,7 +66,14 @@ add_compile_options($<$<CONFIG:Debug>:-DENABLE_DEBUG_LOG=1>)
 add_compile_options(-U__CONFIG_ADD_C_FLAGS)
 
 # reproducible build
-add_link_options("-Wl,--build-id=sha1")
+add_link_options("-Wl,--build-id=0x6BC42CC7360375F3")
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
+   AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"
+   AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+  # On linux64, the default clang cfg (${CMAKE_C_COMPILER_TARGET}-clang.cfg) always insert -rpath and -rpath-link flags
+  add_link_options(--config "${CMAKE_SOURCE_DIR}/.pixi/envs/default/bin/${CMAKE_C_COMPILER_TARGET}.cfg")
+  add_link_options(--no-default-config)
+endif()
 
 add_link_options(-D__MAIN_ADD_L_FLAGS)
 
