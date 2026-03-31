@@ -1052,7 +1052,7 @@ static bool init_loader_info() {
   loader_info.pt_mmap_params[0].prot = PROT_READ | PROT_EXEC;
 
   extern void _start();                                                    // runtime entry
-  auto const bias = &_start - chlibc_info.entry_vaddr;                     // chlibc runtime bias
+  auto const bias = (uintptr_t)&_start - chlibc_info.entry_vaddr;                     // chlibc runtime bias
   auto const vaddr = (uint64_t)((typeof(bias))(uintptr_t)&loader - bias);  // loader linktime vaddr
   auto found = false;
   for (int i = 0; i < chlibc_info.pt_mmap_cnt; ++i) {
@@ -1689,6 +1689,7 @@ static bool handle_exec(const pid_t pid) {
 
   RELO_SET_OFFSET(g_loader_param, end);
 
+  auto const pc_page = align_page_d(regs._M_PC);  // write to the begin of the page
   regs._M_PC = target_interp.entry_vaddr;  // save entry vaddr before writing to stack
   g_loader_param->regs = regs;             // now g_loader_param.written is overwritten by regs
 
@@ -1708,10 +1709,9 @@ static bool handle_exec(const pid_t pid) {
   PT_WRITE_BULKS(pid, regs._M_SP, g_loader_param, stack_upload_sz, false, return false);
 
   // prepare loader_loader syscall args
-  auto const pc_page = align_page_d(regs._M_PC);  // write to the begin of the page
-  auto const loader_loader_sz = (uintptr_t)loader_loader_end - (uintptr_t)loader_loader;
+  auto const loader_loader_sz = (uintptr_t)&loader_loader_end - (uintptr_t)&loader_loader;
   auto const r_chlibc_path = regs._M_SP + LOADER_PARAM_CHLIBC_PATH_OFS(g_loader_param);
-  regs._M_PC = pc_page + (uintptr_t)loader_loader_entry - (uintptr_t)loader_loader;
+  regs._M_PC = pc_page + (uintptr_t)&loader_loader_entry - (uintptr_t)&loader_loader;
 
   // loader abi
   regs._M_S1 = loader_info.filesz;
