@@ -779,7 +779,7 @@ static size_t calc_g_buffer_sz(size_t);
 static bool alloc_g_buffer() {
   auto const arg_max = _OK_CALL(sysconf(_SC_ARG_MAX), _POSIX_ARG_MAX <= _ && _ <= INT64_C(4194304), return false);
   auto const aligned_size = align_page_u(calc_g_buffer_sz(arg_max));  // align up to page size
-  if (UNLIKELY(aligned_size < (UINT64_C(1) << 32)))
+  if (UNLIKELY(aligned_size >= (UINT64_C(1) << 32)))
     return false;  // less then 4G
 
   g_buffer = _OK_CALL(mmap(NULL, aligned_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0),
@@ -1051,9 +1051,9 @@ static bool init_loader_info() {
   loader_info.pt_mmap_params[0].vaddr = 0;
   loader_info.pt_mmap_params[0].prot = PROT_READ | PROT_EXEC;
 
-  extern const uint8_t *_start;                                           // runtime entry
-  auto const bias = _start - chlibc_info.entry_vaddr;                     // chlibc runtime bias
-  auto const vaddr = (uint64_t)((typeof(bias))(uintptr_t)loader - bias);  // loader linktime vaddr
+  extern void _start();                                                    // runtime entry
+  auto const bias = &_start - chlibc_info.entry_vaddr;                     // chlibc runtime bias
+  auto const vaddr = (uint64_t)((typeof(bias))(uintptr_t)&loader - bias);  // loader linktime vaddr
   auto found = false;
   for (int i = 0; i < chlibc_info.pt_mmap_cnt; ++i) {
     auto const m = chlibc_info.pt_mmap_params + i;
