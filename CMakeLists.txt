@@ -103,7 +103,7 @@ target_compile_options(
 
 add_executable(chlibc src/chlibc.c)
 target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # enable GNU extension header features
-target_link_libraries(chlibc PUBLIC chlibc-loader)
+target_link_libraries(chlibc PRIVATE chlibc-loader)
 add_custom_command(
   TARGET chlibc
   PRE_LINK

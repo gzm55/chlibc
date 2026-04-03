@@ -1052,7 +1052,7 @@ static bool init_loader_info() {
   loader_info.pt_mmap_params[0].prot = PROT_READ | PROT_EXEC;
 
   extern void _start();                                                    // runtime entry
-  auto const bias = (uintptr_t)&_start - chlibc_info.entry_vaddr;                     // chlibc runtime bias
+  auto const bias = (uintptr_t)&_start - chlibc_info.entry_vaddr;          // chlibc runtime bias
   auto const vaddr = (uint64_t)((typeof(bias))(uintptr_t)&loader - bias);  // loader linktime vaddr
   auto found = false;
   for (int i = 0; i < chlibc_info.pt_mmap_cnt; ++i) {
@@ -1441,7 +1441,6 @@ typedef struct {
   uint64_t param_ofs;
   uint64_t total_size;
   uint64_t auxv_map[64];  // AT_EXECFN = 31
-  // uint8_t at_execfn_idx;
   uint8_t at_base_idx;
   uint8_t at_pagesz_idx;
 } exec_arg_t;
@@ -1493,9 +1492,6 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
     for (auto p = (const Elf64_auxv_t *)(g_buffer + exec_arg->auxv_ofs); p->a_type != AT_NULL; ++p, ++i) {
       if (p->a_type < ARRAY_SIZE(exec_arg->auxv_map))
         exec_arg->auxv_map[p->a_type] = p->a_un.a_val;
-      // if (p->a_type == AT_EXECFN)
-      // exec_arg->at_execfn_idx = i;
-      // else if (p->a_type == AT_BASE)
       if (p->a_type == AT_BASE)
         exec_arg->at_base_idx = i;
       else if (p->a_type == AT_PAGESZ)
@@ -1690,11 +1686,9 @@ static bool handle_exec(const pid_t pid) {
   RELO_SET_OFFSET(g_loader_param, end);
 
   auto const pc_page = align_page_d(regs._M_PC);  // write to the begin of the page
-  regs._M_PC = target_interp.entry_vaddr;  // save entry vaddr before writing to stack
-  g_loader_param->regs = regs;             // now g_loader_param.written is overwritten by regs
+  regs._M_PC = target_interp.entry_vaddr;         // save entry vaddr before writing to stack
+  g_loader_param->regs = regs;                    // now g_loader_param.written is overwritten by regs
 
-  // g_loader_param->at_execfn_idx = exec_arg.at_execfn_idx;
-  // g_loader_param->at_base_idx = exec_arg.at_base_idx;
   const loader_reg_flags_t reg_flags = {
       .at_base_idx = exec_arg.at_base_idx,
       .at_pagesz_idx = exec_arg.at_pagesz_idx,
@@ -1715,25 +1709,26 @@ static bool handle_exec(const pid_t pid) {
 
   // loader abi
   regs._M_S1 = loader_info.filesz;
-  // regs._M_S2 = RELO_PTR(g_loader_param, auxv)[exec_arg.at_execfn_idx].a_un.a_val;
   regs._M_S2 = exec_arg.auxv_map[AT_EXECFN];
   regs._M_S3 = target_interp.is_dyn ? target_interp.total_memsz : 0;
   regs._M_S4 = reg_flags.raw;
 
 #if defined(ARCH_X64)
-  regs._M_SYS_NR = SYS_open;  // old open() syscall only uses 2 regs
+  // old open() syscall only uses 2 regs, but after EVENT_EXEC, rax will always set to 0
+  // we will set rax to SYS_open at loader_loader_entry
+  static_assert(SYS_open == 2);
   regs._M_SYS_ARG1 = r_chlibc_path;
   regs._M_SYS_ARG2 = O_RDONLY;
   regs._M_SYS_ARG3 = PROT_READ | PROT_EXEC;
   regs._M_SYS_ARG4 = MAP_PRIVATE;
   regs._M_SYS_ARG5 = SYS_mmap;
   regs._M_SYS_ARG6 = loader_info.filesz;
-  regs.rbx = SYS_close;
+  regs.rbx = SYS_close - SYS_open;
 
   regs._M_SP -= sizeof(uint64_t);
   PT_WRITE(pid, regs._M_SP, loader_info.entry_vaddr, return false);
   regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, pc_page - SYS_close, return false);
+  PT_WRITE(pid, regs._M_SP, pc_page - regs.rbx, return false);
 #else  // defined(ARCH_ARM64)
   regs._M_SYS_NR = SYS_openat;       // no open() syscall
   regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
@@ -1755,8 +1750,9 @@ static bool handle_exec(const pid_t pid) {
 #endif
 
   // upload loader_loader and registers
+  // TODO FAIL needs restore
   auto const write_rx_page = true;  // force poke loader_loader to the readonly page
-  PT_WRITE_BULKS(pid, pc_page, loader_loader, loader_loader_sz, write_rx_page, return false);
+  PT_WRITE_BULKS(pid, pc_page, &loader_loader, loader_loader_sz, write_rx_page, return false);
   PT_OK_CALL(pt_set(pid, &regs), return false);
   return true;
 }
@@ -1772,35 +1768,41 @@ void loader_loader() {
       // syscall: rax <- rax(rdi, rsi, rdx, r10, r8, r9)
       // callee-saved: rbx, rbp, r12, r13, r14, r15
 
-      // rax=fd_or_err rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close *rsp=entry_offset
+      // rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open *rsp=entry_offset
       "xchg %%rax, %%r8;"
-      // rax=mmap rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=fd_or_err r9=filesz rbx=close *rsp=entry_offset
+      // rax=mmap rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=fd? r9=filesz rbx=close-open *rsp=entry_offset
       "xchg %%rsi, %%r9;"
-      // rax=mmap rdi=chlibc_path(hint) rsi=filesz rdx=R-X r10=priv r8=fd_or_err r9=0 rbx=close *rsp=entry_offset
+      // [rax=mmap rdi=chlibc_path(hint) rsi=filesz rdx=R-X r10=priv r8=fd? r9=0] rbx=close-open *rsp=entry_offset
       "syscall;"
-      // rax=addr_or_err rdi=chlibc_path(hint) r8=fd_or_err rbx=close *rsp=entry_offset
 
-      "xchg %%rax, %%rbx;"
-      // rax=close rdi=chlibc_path(hint) r8=fd_or_err rbx=addr_or_err *rsp=entry_offset
+      // rax=addr? rdi=chlibc_path(hint) r8=fd? rbx=close-open *rsp=entry_offset
       "movq %%r8, %%rdi;"
+      // rax=addr? rdi=fd? r8=fd? rbx=close-open *rsp=entry_offset
+      "xchg %%rax, %%rbx;"
 
       "loader_loader_entry:"
-      // round 1: rax=open rdi=chlibc_path rsi=O_RDONLY(0)
-      // round 2: rax=close rdi=fd_or_err rbx=addr_or_err *rsp=entry_offset
+      // After EVENT_EXEC, the result register (rax) of execve syscall will always be set to zero.
+      // round 1: rax=0 rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
+      //          [rsp] = [loader_loader - (close - open), entry_offset]
+      // round 2: rax=close-open rdi=fd? rbx=addr? *rsp=entry_offset
+      "addb $2, %%al;"
+      // round 1: [rax=open rdi=chlibc_path rsi=O_RDONLY(0)] rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
+      //          [rsp] = [loader_loader - (close - open), entry_offset]
+      // round 2: [rax=close rdi=fd?] rbx=addr? *rsp=entry_offset
       "syscall;"
-      // round 1: rax=fd_or_err rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close
-      // round 1: *rsp=(loader_loader - close)
-      // round 2: rax=0_or_err rdi=fd_or_err rbx=addr_or_err *rsp=entry_offset
-      "addq %%rbx, (%%rsp) ;"
-      "jc loader_loader_fail;"  // mmap err will overflow
+      // round 1: rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
+      //          [rsp] = [loader_loader - (close - open), entry_offset]
+      // round 2: rax=0? rdi=fd? rbx=addr? *rsp=entry_offset
+      "addq %%rbx, (%%rsp);"
+      "jc loader_loader_fail;"  // in round 2, mmap err overflow the previous addq
 
-      // round 1: jump (*rsp=loader_loader)   rax=fd_or_err
-      // round 2: jump (*rsp=entry vaddr)   rbx=addr
+      // round 1: rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
+      //          [rsp] = [[loader_loader], entry_offset]
+      // round 2: rax=0? rdi=fd? rbx=addr? [*rsp=entry_vaddr]
       "ret;"
 
       "loader_loader_fail:"
-      // rbx = -(mmap errno)
-      "int3;"
+      "int3;"  // rbx = -(mmap errno)
       "trap_restore_marker:"
       "syscall; ud2; ud2; .2byte 0x3065;"  // mark of restoring via execve()
 
@@ -1879,13 +1881,13 @@ static int handle_trap(const pid_t pid) {
       auto const remote_argv0_w_magic_addr = RELO_PTR_REMOTE(regs._M_SP, param, argv0_w_magic);
       auto const remote_argv_addr = RELO_PTR_REMOTE(regs._M_SP, param, argv);
       auto const remote_envp_addr = RELO_PTR_REMOTE(regs._M_SP, param, envp);
-      // auto const remote_auxv_addr = RELO_PTR_REMOTE(regs._M_SP, param, auxv);
-      // auto const remote_at_execfn_addr =
-      //    (uintptr_t)&((const Elf64_auxv_t *)remote_auxv_addr)[param.at_execfn_idx].a_un.a_val;
       auto const remote_at_execfn_addr = regs._M_S2;
 
       regs._M_PC += TRAP_OP_NEXT;
       regs._M_SYS_NR = SYS_execve;
+#ifdef ARCH_X64
+      regs.orig_rax = regs._M_SYS_NR;
+#endif
       regs._M_SYS_ARG1 = remote_at_execfn_addr;
       regs._M_SYS_ARG2 = remote_argv_addr;
       regs._M_SYS_ARG3 = remote_envp_addr;

@@ -246,9 +246,12 @@ static inline void *loader_mmap(void *const base, const mmap_param_t *const m, c
   if (SYSCALL_FAIL(rst))
     return rst;  // mmap() fail
 
-  // clear tail half page
-  auto const zerosz = align_page_u_dist((size_t)m->length);
-  _tlc_memclr(rst + m->length, zerosz);
+  // clear the writable tail half page, see the ref
+  // ref: https://github.com/torvalds/linux/blob/v6.19/fs/binfmt_elf.c#L435
+  if (prot & PROT_WRITE) {
+    auto const zerosz = align_page_u_dist((size_t)m->length);
+    _tlc_memclr(rst + m->length, zerosz);
+  }
 
   // try munmap() placeholder pages
   if (segsz < placeholder)
