@@ -1805,7 +1805,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     PT_READ_BULKS_FAST(pid, curr_sp, &regs, sizeof(regs), return HTRAP_FATAL);
 
     // clear the stack
-    static char z[align_u(sizeof(regs) + 512, sizeof(uint64_t))] = {0};
+    static const char z[align_u(sizeof(regs) + 512, sizeof(uint64_t))] = {0};
     PT_WRITE_BULKS(pid, curr_sp - 512, z, sizeof(z), false);
 
     // run new interp
