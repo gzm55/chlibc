@@ -775,6 +775,13 @@ static bool init_sys_config_ptrace(const pid_t pid, bool exitkill) {
 // The pointer and the size must be align to the system pagesize.
 // Automatically unmapped when the tracer is terminated.
 static int8_t *g_buffer;
+#if LOADER_LOADER_SP > 0
+static uint64_t (*g_loader_loader_param)[LOADER_LOADER_SP / sizeof(uint64_t)];
+#else
+static const uint64_t *g_loader_loader_param;
+#endif
+static loader_param_t *g_loader_param;
+static uint32_t g_loader_param_written;
 static size_t calc_g_buffer_sz(size_t);
 static bool alloc_g_buffer() {
   auto const arg_max = _OK_CALL(sysconf(_SC_ARG_MAX), _POSIX_ARG_MAX <= _ && _ <= INT64_C(4194304), return false);
@@ -1076,14 +1083,10 @@ static_assert(sizeof(ptrace(0)) == sizeof(uint64_t));
 static_assert(__SIZEOF_INT128__ == 16);
 typedef typeof(ptrace(0)) ptrace_return_t;
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"
-typedef __int128 pt_result_t;
-static_assert(alignof(pt_result_t) == 16);
-#pragma GCC diagnostic pop
+typedef int128_t pt_result_t;
 
-#define PT_FAIL(r) ((int64_t)((r) >> 64) < 0)
-#define PT_SUCCESS(r) (!PT_FAIL(r))
+#define PT_SUCCESS(r) LIKELY((r) >= 0)
+#define PT_FAIL(r) UNLIKELY((r) < 0)
 #define PT_ERRNO(r) ((typeof(errno))llabs((int64_t)((r) >> 64)))
 #define PT_VALUE(r) ((ptrace_return_t)(r))
 #define _PT_OP_IS_PEEK(op) ((op) == PTRACE_PEEKTEXT || (op) == PTRACE_PEEKDATA || (op) == PTRACE_PEEKUSER)
@@ -1123,7 +1126,7 @@ static inline pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r
   __extension__({                                                           \
     auto const r = _OK_CALL(exp, PT_SUCCESS(_) __VA_OPT__(, ) __VA_ARGS__); \
     auto const _ = PT_VALUE(r);                                             \
-    if (!(ok_)) { /* check value */                                         \
+    if (UNLIKELY(!(ok_))) { /* check value */                               \
       ERR(#exp);                                                            \
       __VA_ARGS__;                                                          \
     }                                                                       \
@@ -1201,8 +1204,9 @@ static inline pt_result_t pt_get_user(const pid_t pid, const size_t ofs) {
 /*static inline*/ pt_result_t pt_set_user(const pid_t pid, const size_t ofs, const uint64_t data) {
   return PT_CALL_S(PTRACE_POKEUSER, pid, ofs, data);
 }
-#define pt_set(pid, addr, ...) \
-  _Generic(addr, common_regs_t *: pt_set_regs, size_t: pt_set_user)((pid), (addr)__VA_OPT__(, ) __VA_ARGS__)
+#define pt_set(pid, addr, ...)                                                                           \
+  _Generic(addr, common_regs_t *: pt_set_regs, const common_regs_t *: pt_set_regs, size_t: pt_set_user)( \
+      (pid), (addr)__VA_OPT__(, ) __VA_ARGS__)
 
 static inline pt_result_t pt_vm_rw(const pid_t pid, const uintptr_t remote, void *const local, const size_t len,
                                    const bool is_read) {
@@ -1218,6 +1222,12 @@ static inline pt_result_t pt_vm_rw(const pid_t pid, const uintptr_t remote, void
   }
   return (pt_result_t)(uint64_t)nread;
 }
+static inline pt_result_t pt_vm_r(const pid_t pid, const uintptr_t remote, void *const local, const size_t len) {
+  return pt_vm_rw(pid, remote, local, len, true);
+}
+static inline pt_result_t pt_vm_w(const pid_t pid, const uintptr_t remote, const void *const local, const size_t len) {
+  return pt_vm_rw(pid, remote, (void *)local, len, false);
+}
 
 static inline pt_result_t pt_read_word(const pid_t pid, const uintptr_t remote_addr) {
 #ifndef ARCH_X64
@@ -1226,7 +1236,7 @@ static inline pt_result_t pt_read_word(const pid_t pid, const uintptr_t remote_a
     return PT_CALL_S(PTRACE_PEEKDATA, pid, remote_addr, 0);  // x64 or remote_addr is aligned to 8
 
   uint64_t data;
-  auto const r = pt_vm_rw(pid, remote_addr, &data, sizeof(data), true);
+  auto const r = pt_vm_r(pid, remote_addr, &data, sizeof(data));
   return ((r >> 64) << 64) | (PT_SUCCESS(r) ? data : UINT64_MAX);
 }
 static inline pt_result_t pt_write_word(const pid_t pid, const uintptr_t remote_addr, const unsigned long data) {
@@ -1276,25 +1286,26 @@ static inline pt_result_t pt_write_word(const pid_t pid, const uintptr_t remote_
   __extension__({                                                                                                    \
     size_t _pt_bulks_sz = 0;                                                                                         \
     if (_PT_BUCKS_USE_VM_API(remote_addr, dst_sz, false))                                                            \
-      _pt_bulks_sz = PT_OK_CALL(pt_vm_rw(pid, remote_addr, dst, dst_sz, true) __VA_OPT__(, ) __VA_ARGS__);           \
+      _pt_bulks_sz = PT_OK_CALL(pt_vm_r(pid, remote_addr, dst, dst_sz) __VA_OPT__(, ) __VA_ARGS__);                  \
     else                                                                                                             \
       _pt_bulks_sz = PT_READ_BULKS(pid, remote_addr, 1, dst, dst_sz, true, false, false __VA_OPT__(, ) __VA_ARGS__); \
     _pt_bulks_sz;                                                                                                    \
   })
-#define PT_WRITE_BULKS(pid, remote_addr, src, src_sz, force, ...)                                           \
-  __extension__({                                                                                           \
-    size_t _pt_bulks_sz = 0;                                                                                \
-    if (_PT_BUCKS_USE_VM_API(remote_addr, src_sz, force))                                                   \
-      _pt_bulks_sz = PT_OK_CALL(pt_vm_rw(pid, remote_addr, src, src_sz, false) __VA_OPT__(, ) __VA_ARGS__); \
-    else {                                                                                                  \
-      auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                                   \
-      auto _pt_bulks_local = (uint64_t *)(uintptr_t)(src);                                                  \
-      for (; _pt_bulks_sz < (src_sz); _pt_bulks_sz += sizeof(uint64_t))                                     \
-        PT_WRITE((pid), (uint64_t)(_pt_bulks_remote++), *_pt_bulks_local++ __VA_OPT__(, ) __VA_ARGS__);     \
-    }                                                                                                       \
-    _pt_bulks_sz;                                                                                           \
+#define PT_WRITE_BULKS(pid, remote_addr, src, src_sz, force, ...)                                       \
+  __extension__({                                                                                       \
+    size_t _pt_bulks_sz = 0;                                                                            \
+    if (_PT_BUCKS_USE_VM_API(remote_addr, src_sz, force))                                               \
+      _pt_bulks_sz = PT_OK_CALL(pt_vm_w(pid, remote_addr, src, src_sz) __VA_OPT__(, ) __VA_ARGS__);     \
+    else {                                                                                              \
+      auto _pt_bulks_remote = (const uint64_t *)(uintptr_t)(remote_addr);                               \
+      auto _pt_bulks_local = (uint64_t *)(uintptr_t)(src);                                              \
+      for (; _pt_bulks_sz < (src_sz); _pt_bulks_sz += sizeof(uint64_t))                                 \
+        PT_WRITE((pid), (uint64_t)(_pt_bulks_remote++), *_pt_bulks_local++ __VA_OPT__(, ) __VA_ARGS__); \
+    }                                                                                                   \
+    _pt_bulks_sz;                                                                                       \
   })
 
+#if 0
 // assume size is multiple of sizeof(uint64_t), return the length not including '\0'
 // when success: return strlen(buf), buf[return] == 0
 // when overflow: return size, buf[size-1] == 0
@@ -1315,6 +1326,7 @@ static size_t pt_read_cstring(const pid_t pid, uintptr_t remote_addr, void *cons
   cbuf[size - 1] = 0;
   return size;  // overflow
 }
+#endif
 
 [[noreturn]]
 static void kill9_child_and_exit(const pid_t child, const int code) {
@@ -1431,9 +1443,9 @@ static inline uint64_t now_ns() {
 
 typedef struct {
   uint64_t rsp;
+  uint64_t pc_page_start;
   uint64_t argc;
   uint64_t argv0;
-  uint64_t argv0_1st_word;
   uint64_t argv_ofs;
   uint64_t envp_ofs;
   uint64_t auxv_ofs;
@@ -1450,6 +1462,7 @@ typedef struct {
 static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t rip, exec_arg_t *const exec_arg) {
   uint64_t ofs = 0;  // offset for both remote rsp base and local exec buffer base
   exec_arg->rsp = rsp;
+  exec_arg->pc_page_start = align_page_d(rip);
 
   // argc, at least 1
   exec_arg->argc = PT_READ_CHK(pid, rsp + ofs, 0 < _ && _ < (1 << 18), return false);
@@ -1521,8 +1534,6 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
     return false;
   }
 
-  exec_arg->argv0_1st_word = PT_READ(pid, exec_arg->argv0, return false);
-
   return true;
 }
 
@@ -1576,18 +1587,18 @@ static inline size_t calc_g_loader_param_sz() {
   return sz + 1024;
 }
 static inline size_t calc_g_buffer_sz(const size_t arg_max) {
-  size_t sz = calc_g_loader_param_sz();
+  // || loader_loader() param on stack || loader() param || page align padding || exec stack buffer ||
+  size_t sz = LOADER_LOADER_SP + calc_g_loader_param_sz();
   sz = align_page_u(sz);
   sz += arg_max;  // download the initial stack here, align to page
   return sz + 1024;
 }
 
-static loader_param_t *g_loader_param;
-static uint32_t g_loader_param_written;
-
 static void init_loader_params() {
-  g_loader_param = (typeof(g_loader_param))g_buffer;
-  g_buffer = align_page_u(g_buffer + calc_g_loader_param_sz());  // fix g_buffer address
+  static_assert(LOADER_LOADER_SP % alignof(loader_param_t) == 0);
+  g_loader_loader_param = (typeof(g_loader_loader_param))g_buffer;
+  g_loader_param = (typeof(g_loader_param))(g_buffer + LOADER_LOADER_SP);
+  g_buffer = align_page_u(g_buffer + LOADER_LOADER_SP + calc_g_loader_param_sz());  // fix g_buffer address
 
   // init const part
   {
@@ -1603,7 +1614,7 @@ static void init_loader_params() {
     auto const begin = RELO_SET_OFFSET(g_loader_param, mmap_params);
     auto const len = target_interp.pt_mmap_cnt * sizeof(*begin);
     memcpy(begin, target_interp.pt_mmap_params, len);
-    g_loader_param->written += len;
+    RELO_WRITTEN(g_loader_param) += len;
   }
 
   // fill munmap params
@@ -1612,123 +1623,119 @@ static void init_loader_params() {
     auto src = system_interp.pt_mmap_params;
     for (auto i = 0; i < system_interp.pt_mmap_cnt; ++i)
       dst[i] = (typeof(*dst)){.vaddr = src[i].vaddr, .length = src[i].length};
-    g_loader_param->written += system_interp.pt_mmap_cnt * sizeof(*dst);
+    RELO_WRITTEN(g_loader_param) += system_interp.pt_mmap_cnt * sizeof(*dst);
   }
 
   // fill interp_path
   {
     auto const p = RELO_SET_OFFSET(g_loader_param, interp_path);
-    g_loader_param->written += 1 + stpcpy(p, target_interp.path) - p;
+    RELO_WRITTEN(g_loader_param) += 1 + stpcpy(p, target_interp.path) - p;
   }
 
   // fill libc_dir
   {
     auto const p = RELO_SET_OFFSET(g_loader_param, libc_dir);
-    g_loader_param->written += 1 + stpcpy(p, target_interp.libc_dir) - p;
+    RELO_WRITTEN(g_loader_param) += 1 + stpcpy(p, target_interp.libc_dir) - p;
   }
 
   // fill chlibc_path
   {
     auto const p = RELO_SET_OFFSET(g_loader_param, chlibc_path);
-    g_loader_param->written += 1 + stpcpy(p, chlibc_info.path) - p;
+    RELO_WRITTEN(g_loader_param) += 1 + stpcpy(p, chlibc_info.path) - p;
   }
 
-  // fill prefix of argv0_w_magic
-  {
-    memcpy(RELO_SET_OFFSET(g_loader_param, argv0_w_magic), "/\xFF\xFF\xFF\xFF\xFF\xFF/", 8);
-    g_loader_param->written += 8;
-  }
+  RELO_SET_OFFSET(g_loader_param, argc);
+  RELO_WRITTEN(g_loader_param) += sizeof(uint64_t);
 
-  g_loader_param_written = g_loader_param->written;  // save for resetting written
+  g_loader_param_written = RELO_WRITTEN(g_loader_param);  // save for resetting written
 }
 
-static bool handle_exec(const pid_t pid) {
+typedef enum { HEXEC_OK, HEXEC_SKIP, HEXEC_FAIL_SAFE, HEXEC_FATAL } handle_exec_result_t;
+typedef enum {
+  HTRAP_USER,
+  HTRAP_LOADER_STEP,
+  HTRAP_LOADER_DONE,
+  HTRAP_LOADER_DONE_WITH_FAIL,
+  HTRAP_FAIL_SAFE,
+  HTRAP_FATAL
+} handle_trap_result_t;
+
+static handle_exec_result_t handle_exec(const pid_t pid) {
   common_regs_t regs;
-  PT_OK_CALL(pt_get(pid, &regs), return false);
+  PT_OK_CALL(pt_get(pid, &regs), return HEXEC_FAIL_SAFE);
+  g_loader_param->regs = regs;
 
   exec_arg_t exec_arg;
   if (!parse_exec_arg(pid, regs._M_SP, regs._M_PC, &exec_arg))  // rsp aligns to 16 bytes via 64bit Linux ABI
-    return false;
+    return HEXEC_FAIL_SAFE;
 
-  if (0 == memcmp(&exec_arg.argv0_1st_word, "/\xFF\xFF\xFF\xFF\xFF\xFF/", 8)) {
-    DEBUG(pid, 0, 0, "loader failing fallback");
-    PT_WRITE(pid, regs._M_SP + exec_arg.argv_ofs, exec_arg.argv0 + 8, return false);  // restore argv0
-    return false;
-  }
+  // Check process
   if (!check_tracee_interp(pid, &exec_arg))
-    return false;
+    return HEXEC_SKIP;  // skip the process with non-standard interp
+  {
+    char proc_exec[64], full[PATH_MAX];
+    _OK_CALL(snprintf(proc_exec, sizeof(proc_exec), "/proc/%d/exe", pid), _ < (int)sizeof(proc_exec),
+             return HEXEC_FAIL_SAFE);
+    _OK_CALL(realpath(proc_exec, full), _ != nullptr, return HEXEC_FAIL_SAFE);
+    if (strncmp(full, chlibc_root, chlibc_root_len) != 0)
+      return HEXEC_SKIP;  // skip the process whose main elf is out of chlibc root
+  }
 
-  // fill loader params of this tracee
-  g_loader_param->written = g_loader_param_written;
-  g_loader_param->written +=
-      1 + _OK_CALL(pt_read_cstring(pid, exec_arg.argv0, g_loader_param->data + g_loader_param_written,
-                                   g_sc.max_arg_strlen - 8),
-                   _ < g_sc.max_arg_strlen - 8, return false);
+  // Prepare loader_loader() address
+  auto const write_rx_page = true;  // force poke loader_loader to the readonly page
+  auto const ll_bias = exec_arg.pc_page_start;
+  auto const ll_sz = align_u((uintptr_t)&loader_loader_end - (uintptr_t)&loader_loader, 8);
+  auto const ll_entry_vaddr = (uintptr_t)&loader_loader_entry - (uintptr_t)&loader_loader;
 
-  RELO_SET_OFFSET(g_loader_param, argc);
-  g_loader_param->written += sizeof(uint64_t);
+  // Upload full loader_loader()
+  // PT_WRITE_BULKS() to pc page should be none or all success.
+  PT_WRITE_BULKS(pid, exec_arg.pc_page_start, &loader_loader, ll_sz, write_rx_page, return HEXEC_FAIL_SAFE);
 
-  RELO_SET_OFFSET(g_loader_param, argv);
-  g_loader_param->written += exec_arg.envp_ofs - exec_arg.argv_ofs;
+  // Prepare loader params of this tracee
+  RELO_WRITTEN(g_loader_param) = g_loader_param_written;  // reset data position
+
+  // append space for argv
+  RELO_WRITTEN(g_loader_param) += exec_arg.envp_ofs - exec_arg.argv_ofs;
 
   RELO_SET_OFFSET(g_loader_param, envp);
-  g_loader_param->written += exec_arg.auxv_ofs - exec_arg.envp_ofs - sizeof(uint64_t);
+  RELO_WRITTEN(g_loader_param) += exec_arg.auxv_ofs - exec_arg.envp_ofs - sizeof(uint64_t);
 
   RELO_SET_OFFSET(g_loader_param, envp_null);
-  g_loader_param->written += sizeof(uint64_t);
+  RELO_WRITTEN(g_loader_param) += sizeof(uint64_t);
 
   RELO_SET_OFFSET(g_loader_param, auxv);
-  g_loader_param->written += exec_arg.end_ofs - exec_arg.end_ofs;
+  RELO_WRITTEN(g_loader_param) += exec_arg.end_ofs - exec_arg.auxv_ofs;
 
   RELO_SET_OFFSET(g_loader_param, lib_paths);
-  g_loader_param->written += 0;
+  RELO_WRITTEN(g_loader_param) += 0;
 
-  RELO_SET_OFFSET(g_loader_param, end);
+  g_loader_param->regs._M_SYS_RET = 0;                     // SYS_RET will be set to 0 by kernel after EVENT_EXEC
+  g_loader_param->regs._M_PC = target_interp.entry_vaddr;  // loader() requires saving entry vaddr in the backup regs
 
-  auto const pc_page = align_page_d(regs._M_PC);  // write to the begin of the page
-  regs._M_PC = target_interp.entry_vaddr;         // save entry vaddr before writing to stack
-  g_loader_param->regs = regs;                    // now g_loader_param.written is overwritten by regs
-
-  const loader_reg_flags_t reg_flags = {
-      .at_base_idx = exec_arg.at_base_idx,
-      .at_pagesz_idx = exec_arg.at_pagesz_idx,
-#ifdef ARCH_ARM64
-      .support_bti = g_sc.prot_bti != 0,
-#endif
-  };
-
-  // upload loader param to the remote stack
-  auto const stack_upload_sz = LOADER_PARAM_SZ_BEFORE_STACK(g_loader_param);
-  regs._M_SP = exec_arg.rsp - stack_upload_sz;
-  PT_WRITE_BULKS(pid, regs._M_SP, g_loader_param, stack_upload_sz, false, return false);
-
-  // prepare loader_loader syscall args
-  auto const loader_loader_sz = (uintptr_t)&loader_loader_end - (uintptr_t)&loader_loader;
-  auto const r_chlibc_path = regs._M_SP + LOADER_PARAM_CHLIBC_PATH_OFS(g_loader_param);
-  regs._M_PC = pc_page + (uintptr_t)&loader_loader_entry - (uintptr_t)&loader_loader;
-
-  // loader abi
-  regs._M_S1 = loader_info.filesz;
-  regs._M_S2 = exec_arg.auxv_map[AT_EXECFN];
+  // Prepare loader() registers and loader_loader() stack params
+  auto const r_chlibc_path = regs._M_SP + LOADER_PARAM_CHLIBC_PATH_OFS_FROM_ARGC(g_loader_param);
+  regs._M_S1 = loader_info.entry_vaddr;
+  regs._M_S2 = loader_info.filesz;
   regs._M_S3 = target_interp.is_dyn ? target_interp.total_memsz : 0;
-  regs._M_S4 = reg_flags.raw;
+  regs._M_S4 = ((loader_reg_flags_t){
+                    .at_base_idx = exec_arg.at_base_idx,
+                    .at_pagesz_idx = exec_arg.at_pagesz_idx,
+#ifdef ARCH_ARM64
+                    .support_bti = g_sc.prot_bti != 0,
+#endif
+                })
+                   .raw;
 
 #if defined(ARCH_X64)
   // old open() syscall only uses 2 regs, but after EVENT_EXEC, rax will always set to 0
   // we will set rax to SYS_open at loader_loader_entry
-  static_assert(SYS_open == 2);
   regs._M_SYS_ARG1 = r_chlibc_path;
   regs._M_SYS_ARG2 = O_RDONLY;
   regs._M_SYS_ARG3 = PROT_READ | PROT_EXEC;
   regs._M_SYS_ARG4 = MAP_PRIVATE;
   regs._M_SYS_ARG5 = SYS_mmap;
   regs._M_SYS_ARG6 = loader_info.filesz;
-  regs.rbx = SYS_close - SYS_open;
-
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, loader_info.entry_vaddr, return false);
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, pc_page - regs.rbx, return false);
+  regs._M_S0 = SYS_open;
 #else  // defined(ARCH_ARM64)
   regs._M_SYS_NR = SYS_openat;       // no open() syscall
   regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
@@ -1737,189 +1744,77 @@ static bool handle_exec(const pid_t pid) {
   regs._M_SYS_ARG4 = MAP_PRIVATE;
   regs._M_SYS_ARG5 = loader_info.filesz;
   regs._M_SYS_ARG6 = 0;
-  regs.regs[19] = pc_page;
 
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, loader_info.entry_vaddr, return false);  // to x2
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, SYS_close, return false);  // to x8
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, PROT_READ | PROT_EXEC | g_sc.prot_bti, return false);  // to x2
-  regs._M_SP -= sizeof(uint64_t);
-  PT_WRITE(pid, regs._M_SP, SYS_mmap, return false);  // to x8
+  // stack grows downwards
+  (*g_loader_loader_param)[1] = PROT_READ | PROT_EXEC | g_sc.prot_bti;  // to x2
+  (*g_loader_loader_param)[0] = SYS_mmap;                               // to x8
 #endif
 
-  // upload loader_loader and registers
-  // TODO FAIL needs restore
-  auto const write_rx_page = true;  // force poke loader_loader to the readonly page
-  PT_WRITE_BULKS(pid, pc_page, &loader_loader, loader_loader_sz, write_rx_page, return false);
-  PT_OK_CALL(pt_set(pid, &regs), return false);
-  return true;
-}
+  // Upload to stack
+  auto const stack_upload_sz = LOADER_LOADER_SP + LOADER_PARAM_SZ_BEFORE_STACK(g_loader_param);
+  regs._M_SP -= stack_upload_sz;
+  PT_WRITE_BULKS(pid, regs._M_SP, g_loader_loader_param, stack_upload_sz, false, return HEXEC_FAIL_SAFE);
 
-[[noreturn]] [[gnu::naked]] [[gnu::noinline]]
-void loader_loader() {
-  __asm__ volatile(
-      ".global loader_loader_end, loader_loader_pad_end, trap_restore_marker;"
-#if defined(ARCH_X64)
-#  ifndef __clang__
-      "endbr64;"  // gcc does not auto insert endbr64 for a naked function
-#  endif
-      // syscall: rax <- rax(rdi, rsi, rdx, r10, r8, r9)
-      // callee-saved: rbx, rbp, r12, r13, r14, r15
+  // Upload registers, when fail, continue run the callee
+  regs._M_PC = ll_bias + ll_entry_vaddr;
+  PT_OK_CALL(pt_set(pid, &regs), return HEXEC_FATAL);
 
-      // rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open *rsp=entry_offset
-      "xchg %%rax, %%r8;"
-      // rax=mmap rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=fd? r9=filesz rbx=close-open *rsp=entry_offset
-      "xchg %%rsi, %%r9;"
-      // [rax=mmap rdi=chlibc_path(hint) rsi=filesz rdx=R-X r10=priv r8=fd? r9=0] rbx=close-open *rsp=entry_offset
-      "syscall;"
-
-      // rax=addr? rdi=chlibc_path(hint) r8=fd? rbx=close-open *rsp=entry_offset
-      "movq %%r8, %%rdi;"
-      // rax=addr? rdi=fd? r8=fd? rbx=close-open *rsp=entry_offset
-      "xchg %%rax, %%rbx;"
-
-      "loader_loader_entry:"
-      // After EVENT_EXEC, the result register (rax) of execve syscall will always be set to zero.
-      // round 1: rax=0 rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
-      //          [rsp] = [loader_loader - (close - open), entry_offset]
-      // round 2: rax=close-open rdi=fd? rbx=addr? *rsp=entry_offset
-      "addb $2, %%al;"
-      // round 1: [rax=open rdi=chlibc_path rsi=O_RDONLY(0)] rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
-      //          [rsp] = [loader_loader - (close - open), entry_offset]
-      // round 2: [rax=close rdi=fd?] rbx=addr? *rsp=entry_offset
-      "syscall;"
-      // round 1: rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
-      //          [rsp] = [loader_loader - (close - open), entry_offset]
-      // round 2: rax=0? rdi=fd? rbx=addr? *rsp=entry_offset
-      "addq %%rbx, (%%rsp);"
-      "jc loader_loader_fail;"  // in round 2, mmap err overflow the previous addq
-
-      // round 1: rax=fd? rdi=chlibc_path rsi=O_RDONLY(0) rdx=R-X r10=priv r8=mmap r9=filesz rbx=close-open
-      //          [rsp] = [[loader_loader], entry_offset]
-      // round 2: rax=0? rdi=fd? rbx=addr? [*rsp=entry_vaddr]
-      "ret;"
-
-      "loader_loader_fail:"
-      "int3;"  // rbx = -(mmap errno)
-      "trap_restore_marker:"
-      "syscall; ud2; ud2; .2byte 0x3065;"  // mark of restoring via execve()
-
-      "loader_loader_end:"
-      "nop; nop; nop; nop; nop; nop;"
-
-#elif defined(ARCH_ARM64)  // "bti c" is auto inject by the compiler
-      // syscall: x0 <- x8(x0, x1, x2, x3, x4, x5)
-      // callee-saved: x19--x28
-
-      // x8=openat x0=fd_or_err x1=chlibc_path x2=loader_loader x3=priv x4=filesz x5=0 x19=?
-      "ldp x8, x2, [sp], #16;"
-      // x8=mmap x0=fd_or_err x1=chlibc_path x2=R-X x3=priv x4=filesz x5=0 x19=?
-      "mov x1, x4;"
-      // x8=mmap x0=fd_or_err x1=filesz x2=R-X x3=priv x4=filesz x5=0 x19=?
-      "mov x4, x0;"
-      // x8=mmap x0=fd_or_err(hint) x1=filesz x2=R-X x3=priv x4=fd_or_err x5=0 x19=?
-      "svc #0;"
-      // x8=mmap x0=addr_or_err x1=filesz x2=R-X x3=priv x4=fd_or_err x5=0 x19=?
-      "ldp x8, x2, [sp], #16;"
-      // x8=close x0=addr_or_err x1=filesz x2=entry_offset x3=priv x4=fd_or_err x5=0 x19=?
-      "mov x19, x0;"
-      "mov x0, x4;"
-
-      "loader_loader_entry:"
-      // round 1: x8=openat x0=0 x1=chlibc_path x2=O_RDONLY(0) x3=priv x4=filesz x5=0 x19=loader_loader
-      // round 2: x8=close x0=fd_or_err x1=filesz x2=entry_offset x3=priv x4=fd_or_err x5=0 x19=addr_or_err
-      "svc #0;"
-      // round 1: x8=openat x0=fd_or_err x1=chlibc_path x2=O_RDONLY(0) x3=priv x4=filesz x5=0 x19=loader_loader
-      // round 2: x8=close x0=0_or_err x1=filesz x2=entry_offset x3=priv x4=fd_or_err x5=0 x19=addr_or_err
-      "adds x2, x2, x19;"
-      "b.cs loader_loader_fail;"
-
-      // round 1: jump loader_loader
-      // round 2: jump entry vaddr
-      "br x2;"
-
-      "loader_loader_fail:"
-      "trap_restore_marker:"
-      // x19=-(mmap errno)
-      "brk #0x3065; svc #0; udf #0x3065;"  // mark of restoring via execve()
-
-      "loader_loader_end:"
-#else                      // ARCH_RISCV64
-      "loader_loader_entry:"
-      "loader_loader_fail:"
-      "trap_restore_marker:"
-      "c.ebreak; ecall; .2byte 0x3065;"
-      "loader_loader_end:"
-      "nop; nop;"
-#endif
-
-      "nop;"
-      "loader_loader_pad_end:" ::);
+  return HEXEC_OK;
 }
 
 // handle trap events from tracees
-// Return:
-//   - 0: fail, the tracee will be killed
-//   - 1: ok, let the tracee continue to run
-//   - 2: ok, let the tracee run a single step
-static int handle_trap(const pid_t pid) {
+static handle_trap_result_t handle_trap(const pid_t pid) {
   common_regs_t regs;
-  PT_OK_CALL(pt_get(pid, &regs), return 0);
+  PT_OK_CALL(pt_get(pid, &regs), return HTRAP_FAIL_SAFE);
+  auto ok_result = HTRAP_LOADER_DONE;
 
   auto const r = pt_read_word(pid, regs._M_PC);
   if (PT_SUCCESS(r)) {
     auto const v = PT_VALUE(r);
-    if (0 == memcmp(&v, trap_restore_marker, 8)) {
-      loader_param_t param = {0};
-
-      // download restore parameters
-      PT_READ_BULKS_FAST(pid, regs._M_SP + offsetof(loader_param_t, relo_offsets), &param.relo_offsets,
-                         sizeof(param) - offsetof(loader_param_t, relo_offsets), return 0);
-
-      auto const remote_argv0_w_magic_addr = RELO_PTR_REMOTE(regs._M_SP, param, argv0_w_magic);
-      auto const remote_argv_addr = RELO_PTR_REMOTE(regs._M_SP, param, argv);
-      auto const remote_envp_addr = RELO_PTR_REMOTE(regs._M_SP, param, envp);
-      auto const remote_at_execfn_addr = regs._M_S2;
-
-      regs._M_PC += TRAP_OP_NEXT;
-      regs._M_SYS_NR = SYS_execve;
-#ifdef ARCH_X64
-      regs.orig_rax = regs._M_SYS_NR;
-#endif
-      regs._M_SYS_ARG1 = remote_at_execfn_addr;
-      regs._M_SYS_ARG2 = remote_argv_addr;
-      regs._M_SYS_ARG3 = remote_envp_addr;
-
-      PT_WRITE(pid, remote_argv_addr, remote_argv0_w_magic_addr, return 0);  // replace argv[0]
-      PT_OK_CALL(pt_set(pid, &regs), return 0);
-      return 1;
-    }
-
-    if (0 == memcmp(&v, trap_ok_marker, 8)) {
+    if (0 == memcmp(&v, trap_ok_marker, sizeof(ptrace_return_t))) {
       // loader() success, now need munmap the loader() itself and stop
-      if (TRAP_OP_NEXT) {
-        regs._M_PC += TRAP_OP_NEXT;
-        PT_OK_CALL(pt_set(pid, &regs), return 0);
-      }
-      return 2;
+#if TRAP_OP_NEXT > 0
+      regs._M_PC += TRAP_OP_NEXT;
+      PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
+#endif
+      return HTRAP_LOADER_STEP;
     }
 
-    return 1;  // skip unknown trap
+    if (0 == memcmp(&v, trap_munmap_fail_marker, sizeof(ptrace_return_t))) {
+      DEBUG(pid, 0, 0, "loader() success with munmap fail.");
+      ok_result = HTRAP_LOADER_DONE_WITH_FAIL;
+      goto jmp_interp;
+    }
+
+#if TRAP_OP_NEXT > 0
+    siginfo_t si = {.si_signo = SIGTRAP};
+    PT_OK_CALL(pt_get(pid, &si), return HTRAP_FATAL);
+    if (si.si_code == TRAP_BRKPT) {
+      regs._M_PC += TRAP_OP_NEXT;
+      PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
+    }
+#endif
+    return HTRAP_USER;  // skip unknown trap
   }
 
-  if (PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) {
-    loader_param_t param = {0};
+  if (PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) {  // loader() is unloaded
+  jmp_interp:
+    auto const curr_sp = regs._M_SP;
+    // download restoring regs
+    static_assert(offsetof(loader_param_t, regs) == 0);
+    PT_READ_BULKS_FAST(pid, curr_sp, &regs, sizeof(regs), return HTRAP_FATAL);
 
-    // download restore regs
-    PT_READ_BULKS_FAST(pid, regs._M_SP, &param, end_offsetof(loader_param_t, regs), return 0);
-    PT_OK_CALL(pt_set(pid, &param.regs), return 0);  // run new interp
-    return 1;
+    // clear the stack
+    static char z[align_u(sizeof(regs) + 512, sizeof(uint64_t))] = {0};
+    PT_WRITE_BULKS(pid, curr_sp - 512, z, sizeof(z), false);
+
+    // run new interp
+    PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
+    return ok_result;
   }
 
   ERR("cannot read 8 bytes from RIP[0:7]");
-  return 0;
+  return HTRAP_FAIL_SAFE;
 }
 
 // process a waitpid() stop for pid > 0.
@@ -1972,21 +1867,44 @@ static void process(const pid_t pid, const int status, const int exitsig) {
 
     case PTRACE_EVENT_EXEC:
       DEBUG(pid, status >> 16, exitsig, "EVENT_EXEC");
-      if (0 == exitsig && !handle_exec(pid))
-        DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
+      if (0 == exitsig)
+        switch (handle_exec(pid)) {
+        case HEXEC_OK:
+          [[fallthrough]];
+        case HEXEC_SKIP:
+          break;
+        case HEXEC_FAIL_SAFE:
+          DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
+          break;
+        default:  // HEXEC_FATAL
+          deliver_sig = SIGKILL;
+          DEBUG(pid, status >> 16, exitsig, "FATAL: cannot jump to loader_loader()");
+          break;
+        }
 
       break;
 
     case 0:
       DEBUG(pid, status >> 16, exitsig, "SIGTRAP");
-      if (0 == exitsig) {
-        auto const rst = handle_trap(pid);
-        if (0 == rst) {
+      if (0 == exitsig)
+        switch (handle_trap(pid)) {
+        case HTRAP_USER:
+          [[fallthrough]];
+        case HTRAP_FAIL_SAFE:
+          [[fallthrough]];
+        case HTRAP_LOADER_DONE:
+          [[fallthrough]];
+        case HTRAP_LOADER_DONE_WITH_FAIL:
+          break;
+        case HTRAP_LOADER_STEP:
+          if (pt_singlestep(pid, deliver_sig))
+            return;
+          break;
+        default:  // HTRAP_FATAL
           deliver_sig = SIGKILL;
           DEBUG(pid, status >> 16, exitsig, "KILL tracee on non-recoverable errors");
-        } else if (2 == rst && pt_singlestep(pid, deliver_sig))
-          return;  // use singlestep to munmap the loader()
-      }
+          break;
+        }
       break;
 
     default:

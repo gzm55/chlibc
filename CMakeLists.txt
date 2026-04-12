@@ -99,6 +99,7 @@ target_compile_options(
           -fno-unwind-tables # no unwind tables
           -fno-asynchronous-unwind-tables
           -fno-plt # not PLT
+          -mgeneral-regs-only # no fp & simd registers
 )
 
 add_executable(chlibc src/chlibc.c)

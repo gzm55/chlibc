@@ -10,9 +10,11 @@ SECTIONS {
 } INSERT AFTER .text;
 
 #if defined(__x86_64__)
-  ASSERT(loader_loader_end - loader_loader == 4 + 24 + 8, "loader_loader size is not  4 + 24 + 8 on x86_64")
+  ASSERT(loader_loader_end - loader_loader == 21, "loader_loader size is not  21 on x86_64")
+  ASSERT(loader_end - trap_ok_marker == 10, "ok marker size is not 10")
 #else // aarch64
-  ASSERT(loader_loader_end - loader_loader == (1 + 12 + 2)*4, "loader_loader size is not (1 + 12 + 2)*4 on aarch64")
+  ASSERT(loader_loader_end - loader_loader == 10*4, "loader_loader size is not 10*4 on aarch64")
+  ASSERT(loader_end - trap_ok_marker == 16, "ok marker size is not 16")
 #endif
 
-ASSERT(((loader_loader_end - loader_loader + 7) & ~7) <= loader_loader_pad_end - loader_loader, "pad is not enough for 8 bytes")
+ASSERT(loader_end - trap_munmap_fail_marker == 8, "munmap fail marker size is not 8")

@@ -58,6 +58,28 @@ static inline void *_tlc_memclr(void *const s, size_t n) {
 }
 
 LOADER_SECTION(text)
+static inline void *_tlc_memmove16(void *dest, const void *src, size_t count) {
+  auto const rst = dest;
+#ifdef ARCH_X64
+  __asm__ volatile("rep movsb" : "+D"(dest), "+S"(src), "+c"(count) : : "memory", "cc");  // ERMS
+#else
+  auto const d = (uint128_t *)__builtin_assume_aligned(dest, 16);
+  auto const s = (const uint128_t *)__builtin_assume_aligned(src, 16);
+  auto const n = align_u(count, alignof(uint128_t)) / sizeof(uint128_t);  // extend to full 16 bytes
+                                                                          //
+  // ensure s[n-1] exists and will not be overlapped in moving loop body
+  __builtin_assume(n > 0);
+  __builtin_assume((uintptr_t)s - (uintptr_t)d > 16);
+
+#  pragma unroll 2
+  for (size_t i = 0; i < (n & ~UINT64_C(1)); i++)
+    d[i] = s[i];
+  d[n - 1] = s[n - 1];
+#endif
+  return rst;
+}
+
+LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uintptr_t _tlc_mmap(void *addr, const size_t length, const int prot, const int flags, const int fd,
                                   const off_t offset) {
@@ -179,19 +201,23 @@ extern const char asm_ld_lib_key[];
 
 LOADER_SECTION(text)
 #ifdef ARCH_X64
-void loader_fix_stack(loader_param_t *const param, long, char **p_ld_dir) {
+void loader_fix_stack(void *const new_sp, const void *const old_sp, char **p_ld_dir, const size_t count) {
 #else
-void loader_fix_stack(loader_param_t *const param, char **p_ld_dir) {
+void loader_fix_stack(const size_t count, char **p_ld_dir, void *const new_sp, const void *const old_sp) {
 #endif
+  // Move [rsp, rsp + sz) to [new_sp, new_sp + sz), assume new_sp < sp
+  // On the return of execve, the DF must be 0.
+  auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
+
   auto prev = asm_ld_lib_key + ld_dir_key_len;  // empty string
   if (!p_ld_dir) {
     auto auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);
+    static_assert(sizeof(*auxv) == 16);
+    static_assert(alignof(typeof(*auxv)) == 8);
     auto const end = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, end);
     auto n = end - auxv;  // auxv as at least 3 elems, since AT_ENTRY, AT_EXECFN and etc. are required
     auxv += n;
     while (n--) {
-      static_assert(sizeof(*auxv) == 16);
-      static_assert(alignof(typeof(*auxv)) == 8);
       auto const tmp = *--auxv;  // avoid overlap UB
       *(typeof(auxv))((uintptr_t)auxv + 8) = tmp;
     }
@@ -211,6 +237,12 @@ void loader_fix_stack(loader_param_t *const param, char **p_ld_dir) {
     *p++ = ':';
     _tlc_stpcpy(p, prev);
   }
+
+  param->regs._M_SP = (uintptr_t)RELO_PTR(param, argc);  // restore stack for interp
+
+  // cleaning stack except regs, this will destroy the loader parameter
+  auto const after_regs = ((uint8_t *)param) + end_offsetof(typeof(*param), regs);
+  _tlc_memclr(after_regs, param->regs._M_SP - (uintptr_t)after_regs);
 }
 
 // for align to system page
@@ -264,7 +296,9 @@ static inline void *loader_mmap(void *const base, const mmap_param_t *const m, c
 // success return {stacksz for moving, the elem in envp for LD_LIBRARY_PATH}
 LOADER_SECTION(text)
 stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_total_memsz,
-                              const loader_reg_flags_t rflags) {
+                              const loader_reg_flags_t rflags, uint64_t, const int fd_chlibc) {
+  _tlc_close(fd_chlibc);  // try close the fd of chlibc
+
   stack_move_info_t info = {
       .stacksz = -22,
       .ld_dir = nullptr,

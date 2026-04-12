@@ -1,3 +1,5 @@
+// clang-format Language: C
+
 #ifndef __CHLIBC_COMMON_H__
 #define __CHLIBC_COMMON_H__
 
@@ -6,17 +8,17 @@
 #include <stdlib.h>
 
 #if defined(__x86_64__)
-#define ARCH_X64
+#  define ARCH_X64
 #elif defined(__aarch64__)
-#define ARCH_ARM64
+#  define ARCH_ARM64
 #elif defined(__riscv)
-#if __riscv_xlen == 64 && defined(__riscv_c)
-#define ARCH_RISCV64
+#  if __riscv_xlen == 64 && defined(__riscv_c)
+#    define ARCH_RISCV64
+#  else
+#    error "Requires riscv 64bit with C-extension (Compressed Instructions). Compilation aborted."
+#  endif
 #else
-#error "Requires riscv 64bit with C-extension (Compressed Instructions). Compilation aborted."
-#endif
-#else
-#error "Requires x86_64/aarch64/riscv64 architecture. Compilation aborted."
+#  error "Requires x86_64/aarch64/riscv64 architecture. Compilation aborted."
 #endif
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
@@ -24,20 +26,23 @@
 #define _STR_HELPER(x) #x
 #define _STR(x) _STR_HELPER(x)
 
-#define ARRAY_SIZE(x) (sizeof(int[_Generic(&(x), typeof(&(x)[0])*: -1, default: 1)]) * 0 + sizeof(x) / sizeof(*(x)))
-#define sizeof_member(t, m) (sizeof(((t*)nullptr)->m))
+#define ARRAY_SIZE(x) (sizeof(int[_Generic(&(x), typeof(&(x)[0]) *: -1, default: 1)]) * 0 + sizeof(x) / sizeof(*(x)))
+#define sizeof_member(t, m) (sizeof(((t *)nullptr)->m))
 #define end_offsetof(t, m) (offsetof(t, m) + sizeof_member(t, m))
 #define is_power_2(x) (0 == ((x) & ((x) - 1)))
 
 ////////// Align Macros ////////////
-#define __ALIGNAS_TYPE(fallback, as, ...)                                                       \
-  typeof(__extension__({                                                                        \
-    [[maybe_unused]] uint64_t _ = 0;                                                            \
-    ({                                                                                          \
-      _Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wunused-value\"")       \
-          _Pragma("GCC diagnostic ignored \"-Wshadow\"") as* _;                                 \
-      _Pragma("GCC diagnostic pop") _Generic(_, uint64_t: (fallback) + UINT64_MAX, default: _); \
-    });                                                                                         \
+#define __ALIGNAS_TYPE(fallback, as, ...)                         \
+  typeof(__extension__({                                          \
+    [[maybe_unused]] uint64_t _ = 0;                              \
+    ({                                                            \
+      _Pragma("GCC diagnostic push")                              \
+      _Pragma("GCC diagnostic ignored \"-Wunused-value\"")        \
+      _Pragma("GCC diagnostic ignored \"-Wshadow\"")              \
+      as *_;                                                      \
+      _Pragma("GCC diagnostic pop")                               \
+      _Generic(_, uint64_t: (fallback) + UINT64_MAX, default: _); \
+    });                                                           \
   }))
 #define __ALIGNAS_OF(as, ...)             \
   sizeof(*__extension__({                 \
@@ -45,7 +50,7 @@
     (char (*)[__alignof__(__c)]) nullptr; \
   }))
 
-#define __ALIGNAS_OF_DEF(p) typeof(*_Generic(__extension__((p) + UINT64_MAX), uint64_t: (uint64_t*)0, default: p))
+#define __ALIGNAS_OF_DEF(p) typeof(*_Generic(__extension__((p) + UINT64_MAX), uint64_t: (uint64_t *)0, default: p))
 #define __ALIGN_Z_EXT(p)                                                                                             \
   ((uint64_t)(unsigned _BitInt(                                                                                      \
       _Generic(__extension__((p) + UINT64_MAX), uint64_t: sizeof(p), default: sizeof(__extension__((p) + 0))) * 8))( \
@@ -94,6 +99,16 @@ typedef struct {
   uintptr_t vaddr;  // without bias
   size_t length;    // page-aligned size
 } munmap_param_t;
+
+#ifdef __SIZEOF_INT128__
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wpedantic"
+typedef __int128 int128_t;
+typedef unsigned __int128 uint128_t;
+static_assert(alignof(int128_t) == 16);
+static_assert(alignof(uint128_t) == 16);
+#  pragma GCC diagnostic pop
+#endif
 
 ////////// API check Functions ////////////
 #define _OK_CALL(exp, ok_, ...)                                                        \
