@@ -4,6 +4,7 @@ channels = ["conda-forge"]
 name = "chlibc"
 platforms = ["linux-64", "osx-arm64"]
 version = "0.1.0"
+requires-pixi = ">=0.62.0"
 
 [system-requirements]
 # build on centos7
