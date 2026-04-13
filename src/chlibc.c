@@ -1092,7 +1092,8 @@ typedef int128_t pt_result_t;
 #define _PT_OP_IS_PEEK(op) ((op) == PTRACE_PEEKTEXT || (op) == PTRACE_PEEKDATA || (op) == PTRACE_PEEKUSER)
 [[gnu::always_inline]]
 static inline pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r, const bool is_peek, const bool strict,
-                                        char *const file, const int flen, char *const msg, const int line) {
+                                        const bool quiet, char *const file, const int flen, char *const msg,
+                                        const int line) {
   auto const success = (typeof(r))-1 != r || (is_peek && 0 == errno);
   auto rst = success ? (pt_result_t)(uint64_t)r : (((pt_result_t)(uint64_t)(int64_t)(-errno) << 64) | UINT64_MAX);
   if (!success) {
@@ -1105,21 +1106,23 @@ static inline pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r
         rst = ((pt_result_t)(int64_t)errno << 64) | UINT64_MAX;  // success with errno in high word
       break;
     default:
-      _log_error(file, flen, msg, line);
+      if (!quiet)
+        _log_error(file, flen, msg, line);
     }
   }
   return rst;
 }
 
-#define _PTRACE_CALL(op, pid, addr, data, strict)                                                                  \
-  (_PT_OP_IS_PEEK(op) ? _pt_check_rst(pid, (errno = 0, ptrace(op, pid, addr, data)), true, strict, __FILE__,       \
-                                      strlen(__FILE__), ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__) \
-                      : _pt_check_rst(pid, ptrace(op, pid, addr, data), false, strict, __FILE__, strlen(__FILE__), \
-                                      ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__))
+#define _PTRACE_CALL(op, pid, addr, data, strict, quiet)                                                            \
+  (_PT_OP_IS_PEEK(op) ? _pt_check_rst(pid, (errno = 0, ptrace(op, pid, addr, data)), true, strict, quiet, __FILE__, \
+                                      strlen(__FILE__), ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__)  \
+                      : _pt_check_rst(pid, ptrace(op, pid, addr, data), false, strict, quiet, __FILE__,             \
+                                      strlen(__FILE__), ":%d ptrace" _STR_HELPER((op, pid, addr, data)), __LINE__))
 
 // call ptrace(...)
-#define PT_CALL(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, false)
-#define PT_CALL_S(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, true)
+#define PT_CALL(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, false, false)
+#define PT_CALL_S(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, true, false)
+#define PT_CALL_Q(op, pid, addr, data) _PTRACE_CALL(op, pid, addr, data, true, true)
 
 // call high level ptrace related functions which returning pt_result_t
 #define PT_OK_CALL_CHK(exp, ok_, ...)                                       \
@@ -1159,7 +1162,7 @@ static inline pt_result_t pt_get_siginfo(const pid_t pid, siginfo_t dst[static 1
   if (UNLIKELY(r == -1 && PT_IS_GROUP_STOP(req_sig, errno)))
     return ((pt_result_t)(uint64_t)(int64_t)(-EINVAL) << 64) | UINT64_MAX;  // group-stop, skip error log
 
-  auto const rfull = _pt_check_rst(pid, r, false, true, __FILE__, strlen(__FILE__),
+  auto const rfull = _pt_check_rst(pid, r, false, true, false, __FILE__, strlen(__FILE__),
                                    ":%d ptrace" _STR_HELPER((PTRACE_GETSIGINFO, pid, 0, &si)), __LINE__);
   return PT_SUCCESS(rfull) ? ok_rst : rfull;
 }
@@ -1234,6 +1237,16 @@ static inline pt_result_t pt_read_word(const pid_t pid, const uintptr_t remote_a
   if (align_d_dist(remote_addr, 8) == 0)
 #endif
     return PT_CALL_S(PTRACE_PEEKDATA, pid, remote_addr, 0);  // x64 or remote_addr is aligned to 8
+
+  uint64_t data;
+  auto const r = pt_vm_r(pid, remote_addr, &data, sizeof(data));
+  return ((r >> 64) << 64) | (PT_SUCCESS(r) ? data : UINT64_MAX);
+}
+static inline pt_result_t pt_read_word_quiet(const pid_t pid, const uintptr_t remote_addr) {
+#ifndef ARCH_X64
+  if (align_d_dist(remote_addr, 8) == 0)
+#endif
+    return PT_CALL_Q(PTRACE_PEEKDATA, pid, remote_addr, 0);  // x64 or remote_addr is aligned to 8
 
   uint64_t data;
   auto const r = pt_vm_r(pid, remote_addr, &data, sizeof(data));
@@ -1768,7 +1781,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
   PT_OK_CALL(pt_get(pid, &regs), return HTRAP_FAIL_SAFE);
   auto ok_result = HTRAP_LOADER_DONE;
 
-  auto const r = pt_read_word(pid, regs._M_PC);
+  auto const r = pt_read_word_quiet(pid, regs._M_PC);
   if (PT_SUCCESS(r)) {
     auto const v = PT_VALUE(r);
     if (0 == memcmp(&v, trap_ok_marker, sizeof(ptrace_return_t))) {
