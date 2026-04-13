@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/auxv.h>
 #include <sys/prctl.h>
 #include <unistd.h>
@@ -158,6 +159,7 @@ struct link_map_ext {
 };
 
 extern char **_dl_argv;
+extern char **environ;
 
 int main(int argc, char *argv[]) {
   printf("==== COMM ====\n");
@@ -165,18 +167,26 @@ int main(int argc, char *argv[]) {
   prctl(PR_GET_NAME, comm);
   printf("comm=%s\n", comm);
 
-  fprintf(stderr, "to stderr");
-
   int i;
   printf("==== ARGV ====\n");
   printf("argc=%d\n", argc);
   for (i = 0; i < argc; ++i)
     printf("%d:[%s]\n", i, argv[i]);
 
+#if 0
   printf("==== DL_ARGV ====\n");
   printf("&_dl_argv=%p  _dl_argv=%p\n", (void *)&_dl_argv, (void *)_dl_argv);
   for (i = 0; i < argc && _dl_argv; ++i)
     printf("%d:[%s]\n", i, _dl_argv[i]);
+#endif
+
+  printf("==== Some Environments ====\n");
+  char **env = environ;
+  while (*env) {
+    if (strncmp(*env, "LD_", 3) == 0 || strncmp(*env, "CONDA_", 6) == 0 || strncmp(*env, "CHLIBC_", 7) == 0)
+      printf("%s\n", *env);
+    env++;
+  }
 
   printf("==== LINK MAP ====\n");
   extern struct r_debug _r_debug;

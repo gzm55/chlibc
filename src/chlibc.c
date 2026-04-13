@@ -1145,6 +1145,10 @@ static inline bool pt_singlestep(const pid_t pid, const int sig) {
   DEBUG(pid, 0, 0, "PTRACE_SINGLESTEP");
   return PT_SUCCESS(PT_CALL(PTRACE_SINGLESTEP, pid, 0, sig));
 }
+static inline bool pt_syscall(const pid_t pid, const int sig) {
+  DEBUG(pid, 0, 0, "PTRACE_SYSCALL");
+  return PT_SUCCESS(PT_CALL(PTRACE_SYSCALL, pid, 0, sig));
+}
 static inline pt_result_t pt_get_msg(const pid_t pid) {
   unsigned long msg = 0;
   auto const r = PT_CALL_S(PTRACE_GETEVENTMSG, pid, 0, &msg);
@@ -1880,21 +1884,10 @@ static void process(const pid_t pid, const int status, const int exitsig) {
 
     case PTRACE_EVENT_EXEC:
       DEBUG(pid, status >> 16, exitsig, "EVENT_EXEC");
-      if (0 == exitsig)
-        switch (handle_exec(pid)) {
-        case HEXEC_OK:
-          [[fallthrough]];
-        case HEXEC_SKIP:
-          break;
-        case HEXEC_FAIL_SAFE:
-          DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
-          break;
-        default:  // HEXEC_FATAL
-          deliver_sig = SIGKILL;
-          DEBUG(pid, status >> 16, exitsig, "FATAL: cannot jump to loader_loader()");
-          break;
-        }
-
+      if (0 == exitsig && pt_syscall(pid, deliver_sig))
+        // On EVENT_EXEC, the tracee is non-dumpable, and syscall-ret is not set to 0.
+        // Let it go to execve exit-stop to handle exec event.
+        return;
       break;
 
     case 0:
@@ -1923,6 +1916,24 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     default:
       DEBUG(pid, status >> 16, exitsig, "unknown ptrace event or non ptrace-stop");
     }
+
+  } else if (stopsig == (SIGTRAP | 0x80)) {
+    // Only execve exit-stop is captured.
+    // check condition: ret == 0 && syscall nr = SYS_execve
+    if (0 == exitsig)
+      switch (handle_exec(pid)) {
+      case HEXEC_OK:
+        [[fallthrough]];
+      case HEXEC_SKIP:
+        break;
+      case HEXEC_FAIL_SAFE:
+        DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
+        break;
+      default:  // HEXEC_FATAL
+        deliver_sig = SIGKILL;
+        DEBUG(pid, status >> 16, exitsig, "FATAL: cannot jump to loader_loader()");
+        break;
+      }
 
   } else {
     // now signal-delivery-stops or group-stops
