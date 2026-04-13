@@ -138,7 +138,7 @@ static_assert(sizeof(loader_relo_types) % sizeof(void *) == 0);
 static_assert(offsetof(loader_relo_types, end) > sizeof(void *));
 #define LOADER_RELO_OFFSETS_COUNT (sizeof(loader_relo_types) / sizeof(void *) - 1)
 #define LOADER_PARAM_SZ_BEFORE_STACK(p) (sizeof(loader_param_t) + __RELO_OFS(p, argc))
-#define LOADER_PARAM_CHLIBC_PATH_OFS_FROM_ARGC(p) (int64_t)(__RELO_OFS(p, chlibc_path) - __RELO_OFS(p, argc))
+#define LOADER_PARAM_CHLIBC_PATH_OFS_FROM_ARGC(p) (int64_t)(int32_t)(__RELO_OFS(p, chlibc_path) - __RELO_OFS(p, argc))
 
 typedef struct {
   alignas(STACK_ALIGNAS) struct {

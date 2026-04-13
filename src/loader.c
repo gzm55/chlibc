@@ -193,9 +193,17 @@ __asm__(
     ".pushsection .loader.rodata,\"a\",@progbits;"
     ".align 16;"
     "asm_ld_lib_key:"
-    ".string \"" LD_DIR_KEY "\";");
+    ".string \"" LD_DIR_KEY
+    "\";"
+    ".align 8;"
+    "asm_info_init:"
+    ".quad -22; .quad 0;"  // .stacksz=-EINVAL (22), .ld_dir = nullptr
+    ".popsection;");
+
 [[gnu::visibility("hidden")]]
 extern const char asm_ld_lib_key[];
+[[gnu::visibility("hidden")]]
+extern const stack_move_info_t asm_info_init;
 
 /// Loader functions
 
@@ -208,8 +216,8 @@ void loader_fix_stack(const size_t count, char **p_ld_dir, void *const new_sp, c
   // Move [rsp, rsp + sz) to [new_sp, new_sp + sz), assume new_sp < sp
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
-
   auto prev = asm_ld_lib_key + ld_dir_key_len;  // empty string
+
   if (!p_ld_dir) {
     auto auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);
     static_assert(sizeof(*auxv) == 16);
@@ -262,7 +270,7 @@ static_assert(sizeof(loader_sys_conf_t) == sizeof(uint64_t));
 LOADER_SECTION(text)
 static inline void *loader_mmap(void *const base, const mmap_param_t *const m, const size_t placeholder, const int fd,
                                 const loader_sys_conf_t g_sc) {
-  auto const nofd = m->offset + 1 == UINT64_MAX;
+  auto const nofd = m->offset + 1 == 0;
   const int prot = m->prot
 #ifdef ARCH_ARM64
                    | (g_sc.support_bti && 0 != (m->prot & PROT_EXEC) ? PROT_BTI : 0)
@@ -299,10 +307,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
                               const loader_reg_flags_t rflags, uint64_t, const int fd_chlibc) {
   _tlc_close(fd_chlibc);  // try close the fd of chlibc
 
-  stack_move_info_t info = {
-      .stacksz = -22,
-      .ld_dir = nullptr,
-  };  // EINVAL=22
+  stack_move_info_t info = asm_info_init;
 
   auto const auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);
   auto const old_base = (uint8_t *)auxv[rflags.at_base_idx].a_un.a_val;
