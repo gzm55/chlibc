@@ -754,7 +754,7 @@ static bool init_sys_config() {
     const struct iovec local = {&buf, 1};
     const struct iovec remote = {&buf, 1};
     auto const ret = syscall(SYS_process_vm_readv, getpid(), &local, 1, &remote, 1, 0);
-    g_sc.has_vm_rwv = ret == -1 && errno == ENOSYS;
+    g_sc.has_vm_rwv = ret != -1 || errno != ENOSYS;
 #endif
   }
   return true;
