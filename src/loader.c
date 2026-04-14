@@ -182,10 +182,25 @@ static inline uint64_t _tlc_close(const int fd) {
 }
 
 // #define LD_DIR_KEY "LD_LIBRARY_PATH="
-LOADER_SECTION(rodata)
-static const char LD_DIR_KEY[] = "LD_LIBRARY_PATH=";
 constexpr auto LD_DIR_KEY_LEN = 16;
-static_assert(sizeof(LD_DIR_KEY) == LD_DIR_KEY_LEN + 1);
+LOADER_SECTION(rodata)
+const union {
+  char cstr[LD_DIR_KEY_LEN + 1];
+  uint128_t d128;
+} LD_DIR_KEY = {.cstr = "LD_LIBRARY_PATH="};
+// static const char LD_DIR_KEY[] = "LD_LIBRARY_PATH=";
+static_assert(sizeof(LD_DIR_KEY.cstr) == LD_DIR_KEY_LEN + 1);
+typedef uint128_t unaligned_uint128_t [[gnu::aligned(STACK_ALIGNAS)]];
+
+LOADER_SECTION(text)
+static inline bool is_ld_dir_env(const char *const p) {
+  if (LIKELY(align_u_dist(p, 0x1000) >= 16)) {
+    auto const p128 = (const unaligned_uint128_t *)p;
+    return *p128 == LD_DIR_KEY.d128;
+  }
+  return UNLIKELY(_tlc_strncmp(p, LD_DIR_KEY.cstr, LD_DIR_KEY_LEN) == 0);
+}
+
 #if 0
 __asm__(
     ".pushsection .loader.rodata,\"a\",@progbits;"
@@ -215,7 +230,9 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
   // Move [rsp, rsp + sz) to [new_sp, new_sp + sz), assume new_sp < sp
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
-  auto prev = LD_DIR_KEY + LD_DIR_KEY_LEN;  // empty string
+  const char empty[1] = {0};
+  // auto prev = LD_DIR_KEY + LD_DIR_KEY_LEN;  // empty string
+  auto prev = empty;  // empty string
 
   if (!*p_ld_dir) {
     auto auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);
@@ -239,7 +256,7 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
 
   auto p = RELO_PTR(param, lib_paths);
   *p_ld_dir = p;
-  p = _tlc_stpcpy(p, LD_DIR_KEY);
+  p = _tlc_stpcpy(p, LD_DIR_KEY.cstr);
   p = _tlc_stpcpy(p, RELO_PTR(param, libc_dir));
   if (*prev) {
     *p++ = ':';
@@ -371,7 +388,8 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   info.ld_dir = RELO_PTR(param, envp_null);
   // for (auto p = (__RELO_TYPE_UQ(envp))RELO_PTR(param, envp); *p; ++p)
   for (auto p = RELO_PTR(param, envp); *p; ++p)
-    if (_tlc_strncmp(*p, LD_DIR_KEY, LD_DIR_KEY_LEN) == 0) {
+    if (is_ld_dir_env(*p)) {
+      // if (_tlc_strncmp(*p, LD_DIR_KEY, LD_DIR_KEY_LEN) == 0) {
       info.ld_dir = p;
       alloc_sz -= sizeof(char *);  // reuse previous elem
 
