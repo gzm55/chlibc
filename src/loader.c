@@ -17,7 +17,7 @@ LOADER_SECTION(text)
 static inline int _tlc_strncmp(const char *const restrict s1, const char *const restrict s2, const size_t n) {
   for (size_t i = 0; i < n; ++i) {
     if (s1[i] - s2[i])
-      return (int)(s1[i] - s2[i]);
+      return (int)((uint8_t)s1[i] - (uint8_t)s2[i]);
     if (!s2[i])
       break;
   }
@@ -181,14 +181,12 @@ static inline uint64_t _tlc_close(const int fd) {
   return ret;
 }
 
-// #define LD_DIR_KEY "LD_LIBRARY_PATH="
 constexpr auto LD_DIR_KEY_LEN = 16;
 LOADER_SECTION(rodata)
 const union {
   char cstr[LD_DIR_KEY_LEN + 1];
   uint128_t d128;
 } LD_DIR_KEY = {.cstr = "LD_LIBRARY_PATH="};
-// static const char LD_DIR_KEY[] = "LD_LIBRARY_PATH=";
 static_assert(sizeof(LD_DIR_KEY.cstr) == LD_DIR_KEY_LEN + 1);
 typedef uint128_t unaligned_uint128_t [[gnu::aligned(STACK_ALIGNAS)]];
 
@@ -200,18 +198,6 @@ static inline bool is_ld_dir_env(const char *const p) {
   }
   return UNLIKELY(_tlc_strncmp(p, LD_DIR_KEY.cstr, LD_DIR_KEY_LEN) == 0);
 }
-
-#if 0
-__asm__(
-    ".pushsection .loader.rodata,\"a\",@progbits;"
-    ".align 16;"
-    "asm_ld_lib_key:"
-    ".string \"" LD_DIR_KEY
-    "\";"
-    ".align 8;"
-    "asm_info_init:"
-    ".quad -22; .quad 0;"  // .stacksz=-EINVAL (22), .ld_dir = nullptr
-    ".popsection;");
 
 [[gnu::visibility("hidden")]]
 extern const char asm_ld_lib_key[];
@@ -231,7 +217,6 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
   const char empty[1] = {0};
-  // auto prev = LD_DIR_KEY + LD_DIR_KEY_LEN;  // empty string
   auto prev = empty;  // empty string
 
   if (!*p_ld_dir) {
@@ -246,7 +231,6 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
       *(typeof(auxv))((uintptr_t)auxv + 8) = tmp;
     }
 
-    // p_ld_dir = RELO_PTR(param, envp_null);
     RELO_OFS_INC(param, envp_null, 8);
     RELO_OFS_INC(param, auxv, 8);
     RELO_OFS_INC(param, lib_paths, 8);
@@ -386,10 +370,8 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   auto alloc_sz = sizeof(char *) + LD_DIR_KEY_LEN + libc_dir_len + 1;  // insert new
 
   info.ld_dir = RELO_PTR(param, envp_null);
-  // for (auto p = (__RELO_TYPE_UQ(envp))RELO_PTR(param, envp); *p; ++p)
   for (auto p = RELO_PTR(param, envp); *p; ++p)
     if (is_ld_dir_env(*p)) {
-      // if (_tlc_strncmp(*p, LD_DIR_KEY, LD_DIR_KEY_LEN) == 0) {
       info.ld_dir = p;
       alloc_sz -= sizeof(char *);  // reuse previous elem
 
@@ -404,7 +386,6 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   param->regs._M_SP = (uintptr_t)align_d(old_sp - alloc_sz, STACK_ALIGNAS);  // save new sp in the backup regs
   info.stacksz = end - old_sp;
 
-  // if (info.ld_dir)
   info.ld_dir -= ((uintptr_t)old_sp - param->regs._M_SP) / sizeof(*info.ld_dir);  // fix for stack moving
 
 FAIL:
