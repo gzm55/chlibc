@@ -126,8 +126,8 @@ typedef struct {
   const char *chlibc_path;
 
   const argc_t *argc;  // entry stack
-  char *const *envp;
-  char **envp_null;  // envp end marker, used to insert envp pointer of LD_LIBRARY_PATH
+  const char **envp;
+  const char **envp_null;  // envp end marker, used to insert envp pointer of LD_LIBRARY_PATH
   const Elf64_auxv_t *auxv;
   union {
     char *lib_paths;  // string of LD_LIBRARY_PATH
@@ -174,16 +174,16 @@ extern const uint8_t trap_ok_marker[];
 extern const uint8_t trap_munmap_fail_marker[];
 
 #ifdef ARCH_X64
-void loader_fix_stack(void *, const void *, char **, size_t);
+void loader_fix_stack(void *, const void *, const char **, size_t);
 #else
-void loader_fix_stack(size_t, char **, void *, const void *);
+void loader_fix_stack(size_t, const char **, void *, const void *);
 #endif
 
 void loader();
 
 typedef struct {
   int64_t stacksz;
-  char **ld_dir;
+  const char **ld_dir;
 } stack_move_info_t;
 
 // when fail return {-errno, nullptr}
