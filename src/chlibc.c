@@ -751,10 +751,9 @@ static bool init_sys_config() {
   {
 #ifdef ARCH_X64
     char buf;
-    const struct iovec local = {&buf, 1};
-    const struct iovec remote = {&buf, 1};
-    auto const ret = syscall(SYS_process_vm_readv, getpid(), &local, 1, &remote, 1, 0);
-    g_sc.has_vm_rwv = ret != -1 || errno != ENOSYS;
+    const struct iovec local = {&buf, 1}, remote = {&buf, 1};
+    auto const ret = syscall(SYS_process_vm_readv, getpid(), &local, UINT64_C(1), &remote, UINT64_C(1), UINT64_C(0));
+    g_sc.has_vm_rwv = ret != INT64_C(-1) || errno != ENOSYS;
 #endif
   }
   return true;
@@ -1218,7 +1217,8 @@ static inline pt_result_t pt_get_user(const pid_t pid, const size_t ofs) {
 static inline pt_result_t pt_vm_rw(const pid_t pid, const uintptr_t remote, void *const local, const size_t len,
                                    const bool is_read) {
   const struct iovec iov_r = {(void *)remote, len}, iov_l = {local, len};
-  auto const nread = syscall(is_read ? SYS_process_vm_readv : SYS_process_vm_writev, pid, &iov_l, 1, &iov_r, 1, 0);
+  auto const nread = syscall(is_read ? SYS_process_vm_readv : SYS_process_vm_writev, pid, &iov_l, UINT64_C(1), &iov_r,
+                             UINT64_C(1), UINT64_C(0));
   if (nread < 0) {
     errno = -nread;
     return ((pt_result_t)nread << 64) | 0;

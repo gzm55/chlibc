@@ -211,9 +211,9 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
 
-  if (p_ld_dir) {  // fix LD_LIBRARY_PATH
-    const char empty[1] = {0};
-    auto prev = empty;  // empty string
+  if (p_ld_dir) {
+    // fix LD_LIBRARY_PATH
+    auto prev = LD_DIR_KEY.cstr + LD_DIR_KEY_LEN;  // empty string
 
     if (!*p_ld_dir) {
       auto auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);
