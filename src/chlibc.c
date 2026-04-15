@@ -1322,7 +1322,6 @@ static inline pt_result_t pt_write_word(const pid_t pid, const uintptr_t remote_
     _pt_bulks_sz;                                                                                       \
   })
 
-#if 0
 // assume size is multiple of sizeof(uint64_t), return the length not including '\0'
 // when success: return strlen(buf), buf[return] == 0
 // when overflow: return size, buf[size-1] == 0
@@ -1343,7 +1342,6 @@ static size_t pt_read_cstring(const pid_t pid, uintptr_t remote_addr, void *cons
   cbuf[size - 1] = 0;
   return size;  // overflow
 }
-#endif
 
 [[noreturn]]
 static void kill9_child_and_exit(const pid_t child, const int code) {
@@ -1480,6 +1478,7 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
   uint64_t ofs = 0;  // offset for both remote rsp base and local exec buffer base
   exec_arg->rsp = rsp;
   exec_arg->pc_page_start = align_page_d(rip);
+  exec_arg->auxv_ofs = 0;
 
   // argc, at least 1
   exec_arg->argc = PT_READ_CHK(pid, rsp + ofs, 0 < _ && _ < (1 << 18), return false);
@@ -1490,8 +1489,6 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
   exec_arg->argv_ofs = ofs;
   PT_READ_BULKS(pid, rsp + ofs, 1, g_buffer + ofs, sizeof(uint64_t), _ != 0, false, false, return false);
   // skip download argv[1...argc]
-  // PT_READ_BULKS(pid, rsp + ofs, 1, g_buffer + ofs, exec_arg->argc * sizeof(uint64_t), _ != 0, false, false, return
-  // false);
   ofs += (exec_arg->argc + 1) * sizeof(uint64_t);
   *(uint64_t *)(g_buffer + ofs - sizeof(uint64_t)) = 0;  // append NULL after argv
   exec_arg->argv0 = *(uint64_t *)(g_buffer + exec_arg->argv_ofs);
@@ -1667,7 +1664,7 @@ static void init_loader_params() {
   g_loader_param_written = RELO_WRITTEN(g_loader_param);  // save for resetting written
 }
 
-typedef enum { HEXEC_OK, HEXEC_SKIP, HEXEC_FAIL_SAFE, HEXEC_FATAL } handle_exec_result_t;
+typedef enum { HEXEC_OK, HEXEC_SKIP, HEXEC_FAIL_SAFE, HEXEC_FAIL_DOWNLOAD, HEXEC_FATAL } handle_exec_result_t;
 typedef enum {
   HTRAP_USER,
   HTRAP_LOADER_STEP,
@@ -1677,17 +1674,15 @@ typedef enum {
   HTRAP_FATAL
 } handle_trap_result_t;
 
-static handle_exec_result_t handle_exec(const pid_t pid) {
+static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t *const exec_arg) {
   common_regs_t regs;
-  PT_OK_CALL(pt_get(pid, &regs), return HEXEC_FAIL_SAFE);
-  g_loader_param->regs = regs;
+  PT_OK_CALL(pt_get(pid, &regs), return HEXEC_FAIL_DOWNLOAD);
 
-  exec_arg_t exec_arg;
-  if (!parse_exec_arg(pid, regs._M_SP, regs._M_PC, &exec_arg))  // rsp aligns to 16 bytes via 64bit Linux ABI
-    return HEXEC_FAIL_SAFE;
+  if (!parse_exec_arg(pid, regs._M_SP, regs._M_PC, exec_arg))  // rsp aligns to 16 bytes via 64bit Linux ABI
+    return exec_arg->auxv_ofs ? HEXEC_FAIL_SAFE : HEXEC_FAIL_DOWNLOAD;
 
   // Check process
-  if (!check_tracee_interp(pid, &exec_arg))
+  if (!check_tracee_interp(pid, exec_arg))
     return HEXEC_SKIP;  // skip the process with non-standard interp
   {
     char proc_exec[64], full[PATH_MAX];
@@ -1698,30 +1693,33 @@ static handle_exec_result_t handle_exec(const pid_t pid) {
       return HEXEC_SKIP;  // skip the process whose main elf is out of chlibc root
   }
 
+  // Save regs
+  g_loader_param->regs = regs;
+
   // Prepare loader_loader() address
   auto const write_rx_page = true;  // force poke loader_loader to the readonly page
-  auto const ll_bias = exec_arg.pc_page_start;
+  auto const ll_bias = exec_arg->pc_page_start;
   auto const ll_sz = align_u((uintptr_t)&loader_loader_end - (uintptr_t)&loader_loader, 8);
   auto const ll_entry_vaddr = (uintptr_t)&loader_loader_entry - (uintptr_t)&loader_loader;
 
   // Upload full loader_loader()
   // PT_WRITE_BULKS() to pc page should be none or all success.
-  PT_WRITE_BULKS(pid, exec_arg.pc_page_start, &loader_loader, ll_sz, write_rx_page, return HEXEC_FAIL_SAFE);
+  PT_WRITE_BULKS(pid, exec_arg->pc_page_start, &loader_loader, ll_sz, write_rx_page, return HEXEC_FAIL_SAFE);
 
   // Prepare loader params of this tracee
   RELO_WRITTEN(g_loader_param) = g_loader_param_written;  // reset data position
 
   // append space for argv
-  RELO_WRITTEN(g_loader_param) += exec_arg.envp_ofs - exec_arg.argv_ofs;
+  RELO_WRITTEN(g_loader_param) += exec_arg->envp_ofs - exec_arg->argv_ofs;
 
   RELO_SET_OFFSET(g_loader_param, envp);
-  RELO_WRITTEN(g_loader_param) += exec_arg.auxv_ofs - exec_arg.envp_ofs - sizeof(uint64_t);
+  RELO_WRITTEN(g_loader_param) += exec_arg->auxv_ofs - exec_arg->envp_ofs - sizeof(uint64_t);
 
   RELO_SET_OFFSET(g_loader_param, envp_null);
   RELO_WRITTEN(g_loader_param) += sizeof(uint64_t);
 
   RELO_SET_OFFSET(g_loader_param, auxv);
-  RELO_WRITTEN(g_loader_param) += exec_arg.end_ofs - exec_arg.auxv_ofs;
+  RELO_WRITTEN(g_loader_param) += exec_arg->end_ofs - exec_arg->auxv_ofs;
 
   RELO_SET_OFFSET(g_loader_param, lib_paths);
   RELO_WRITTEN(g_loader_param) += 0;
@@ -1735,8 +1733,8 @@ static handle_exec_result_t handle_exec(const pid_t pid) {
   regs._M_S2 = loader_info.filesz;
   regs._M_S3 = target_interp.is_dyn ? target_interp.total_memsz : 0;
   regs._M_S4 = ((loader_reg_flags_t){
-                    .at_base_idx = exec_arg.at_base_idx,
-                    .at_pagesz_idx = exec_arg.at_pagesz_idx,
+                    .at_base_idx = exec_arg->at_base_idx,
+                    .at_pagesz_idx = exec_arg->at_pagesz_idx,
 #ifdef ARCH_ARM64
                     .support_bti = g_sc.prot_bti != 0,
 #endif
@@ -1834,6 +1832,40 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
   return HTRAP_FAIL_SAFE;
 }
 
+static void restore_env_path(const pid_t pid, const exec_arg_t *exec_arg) {
+  auto const libc_dir_len = strlen(target_interp.libc_dir);
+
+  auto const l_envp = (const uintptr_t *)(g_buffer + exec_arg->envp_ofs);
+  auto const r_envp = exec_arg->rsp + exec_arg->envp_ofs;
+
+  constexpr auto LD_DIR_KEY_LEN = 16;
+  static const union {
+    char cstr[LD_DIR_KEY_LEN + 1];
+    uint128_t d128;
+  } LD_DIR_KEY = {.cstr = "LD_LIBRARY_PATH="};
+  static_assert(sizeof(LD_DIR_KEY.cstr) == LD_DIR_KEY_LEN + 1);
+
+  size_t i;
+  for (i = 0; l_envp[i]; i++) {
+    uint128_t d128;
+    PT_READ_BULKS_FAST(pid, l_envp[i], &d128, sizeof(d128), return);
+    if (d128 != LD_DIR_KEY.d128)
+      continue;
+
+    char env_buf[PATH_MAX + 1];
+    _OK_CALL(pt_read_cstring(pid, l_envp[i] + LD_DIR_KEY_LEN, env_buf, sizeof(env_buf)), _ + 1 != 0, return);
+    if (strncmp(env_buf, target_interp.libc_dir, libc_dir_len) != 0)
+      return;
+    const char *const next = env_buf + libc_dir_len;
+    if (*next == '\0' || *next == ':') {
+      auto const shift_sz = libc_dir_len + (*next != '\0');  // keep \0
+      PT_WRITE_BULKS(pid, l_envp[i] + shift_sz, LD_DIR_KEY.cstr, LD_DIR_KEY_LEN, false, return);
+      PT_WRITE(pid, r_envp + i * sizeof(char *), l_envp[i] + shift_sz, return);
+    }
+    return;
+  }
+}
+
 // process a waitpid() stop for pid > 0.
 // exitsig>0 means in the existing stage with the specified signal
 static void process(const pid_t pid, const int status, const int exitsig) {
@@ -1920,15 +1952,20 @@ static void process(const pid_t pid, const int status, const int exitsig) {
   } else if (stopsig == (SIGTRAP | 0x80)) {
     // Only execve exit-stop is captured.
     // check condition: ret == 0 && syscall nr = SYS_execve
+    exec_arg_t exec_arg;
     if (0 == exitsig)
-      switch (handle_exec(pid)) {
+      switch (handle_exec(pid, &exec_arg)) {
       case HEXEC_OK:
-        [[fallthrough]];
+        break;
       case HEXEC_SKIP:
+        restore_env_path(pid, &exec_arg);
         break;
       case HEXEC_FAIL_SAFE:
         DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
+        restore_env_path(pid, &exec_arg);
         break;
+      case HEXEC_FAIL_DOWNLOAD:
+        DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL and cannot fix env");
       default:  // HEXEC_FATAL
         deliver_sig = SIGKILL;
         DEBUG(pid, status >> 16, exitsig, "FATAL: cannot jump to loader_loader()");
