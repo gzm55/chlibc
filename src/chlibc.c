@@ -1467,6 +1467,8 @@ typedef struct {
   uint64_t end_ofs;
   uint64_t param_ofs;
   uint64_t total_size;
+  uint64_t elf_base;
+  uint64_t elf_pt_interp;
   uint64_t auxv_map[64];  // AT_EXECFN = 31
   uint8_t at_base_idx;
   uint8_t at_pagesz_idx;
@@ -1552,7 +1554,7 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
 }
 
 // analyze PT_INTERP from main elf
-static bool check_tracee_interp(const pid_t pid, const exec_arg_t exec_arg[static 1]) {
+static bool check_tracee_interp(const pid_t pid, exec_arg_t exec_arg[static 1]) {
   uint64_t pt_phdr_vaddr = 0, pt_interp_vaddr = 0;
   static_assert(offsetof(Elf64_Phdr, p_type) % 8 == 0);
   static_assert(sizeof_member(Elf64_Phdr, p_type) == 4);
@@ -1572,13 +1574,15 @@ static bool check_tracee_interp(const pid_t pid, const exec_arg_t exec_arg[stati
         return false;
       }
       pt_interp_vaddr = PT_READ(pid, header + offsetof(Elf64_Phdr, p_vaddr), return false);
+      exec_arg->elf_pt_interp = header;
     }
   }
 
   if (!pt_interp_vaddr)  // pt_phdr_vaddr is optional
     return false;
 
-  auto const interp_addr = exec_arg->auxv_map[AT_PHDR] - pt_phdr_vaddr + pt_interp_vaddr;
+  exec_arg->elf_base = exec_arg->auxv_map[AT_PHDR] - pt_phdr_vaddr;
+  auto const interp_addr = exec_arg->elf_base + pt_interp_vaddr;
 
   // checking System V ABI standard interp path, length is already checked
   char interp_path[SYS_INTERP_PATH_WORD_NR * sizeof(uint64_t)];
@@ -1770,6 +1774,16 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t *const exec_
   regs._M_SP -= stack_upload_sz;
   PT_WRITE_BULKS(pid, regs._M_SP, g_loader_loader_param, stack_upload_sz, false, return HEXEC_FAIL_SAFE);
 
+  // Patch PT_INTERP header
+  auto const r_end = exec_arg->rsp + exec_arg->end_ofs;
+  auto const new_pt_interp_sz = strlen(target_interp.path) + 1;
+  auto const r_new_pt_interp = r_end - new_pt_interp_sz;
+  auto const r_new_pt_interp_vaddr = r_new_pt_interp - exec_arg->elf_base;
+  PT_WRITE(pid, exec_arg->elf_pt_interp + offsetof(Elf64_Phdr, p_vaddr), r_new_pt_interp_vaddr, return HEXEC_FAIL_SAFE);
+  PT_WRITE(pid, exec_arg->elf_pt_interp + offsetof(Elf64_Phdr, p_memsz), new_pt_interp_sz, return HEXEC_FAIL_SAFE);
+  PT_WRITE(pid, exec_arg->elf_pt_interp + offsetof(Elf64_Phdr, p_filesz), new_pt_interp_sz, return HEXEC_FAIL_SAFE);
+  PT_WRITE(pid, exec_arg->elf_pt_interp + offsetof(Elf64_Phdr, p_offset), 0, return HEXEC_FAIL_SAFE);
+
   // Upload registers, when fail, continue run the callee
   regs._M_PC = ll_bias + ll_entry_vaddr;
   PT_OK_CALL(pt_set(pid, &regs), return HEXEC_FATAL);
@@ -1825,6 +1839,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
 
     // run new interp
     PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
+
     return ok_result;
   }
 

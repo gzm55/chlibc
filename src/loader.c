@@ -207,6 +207,7 @@ void loader_fix_stack(void *const new_sp, const void *const old_sp, const char *
 #else
 void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new_sp, const void *const old_sp) {
 #endif
+  auto const old_end = (char *)old_sp + count;
   // Move [rsp, rsp + sz) to [new_sp, new_sp + sz), assume new_sp < sp
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
@@ -243,6 +244,11 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
       _tlc_stpcpy(p, prev);
     }
   }
+
+  // append the interp path
+  auto const interp_path = RELO_PTR(param, interp_path);
+  auto const interp_path_sz = _tlc_strlen(interp_path) + 1;
+  _tlc_stpcpy(old_end - interp_path_sz, interp_path);
 
   param->regs._M_SP = (uintptr_t)RELO_PTR(param, argc);  // restore stack for interp
 
@@ -345,8 +351,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
     }
 
     base = (uint8_t *)rst - m->vaddr;
-    if (base != old_base)
-      auxv[rflags.at_base_idx].a_un.a_val = (uintptr_t)base;  // save new base
+    auxv[rflags.at_base_idx].a_un.a_val = (uintptr_t)base;  // save new base
 
     ++m;
   }
@@ -364,7 +369,9 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   auto const libc_dir_len = _tlc_strlen(libc_dir);
   auto const old_sp = (const uint8_t *)param;
   auto const end = (const uint8_t *)RELO_PTR(param, end);
-  auto alloc_sz = sizeof(char *) + LD_DIR_KEY_LEN + libc_dir_len + 1;  // insert new
+  auto const interp_path_sz = _tlc_strlen(interp_path) + 1;
+  auto alloc_sz = sizeof(char *) + LD_DIR_KEY_LEN + libc_dir_len + 1;  // insert new env elem
+  alloc_sz += interp_path_sz;                                          // insert interp path
 
   info.ld_dir = RELO_PTR(param, envp_null);
   for (auto p = RELO_PTR(param, envp); *p; ++p)
@@ -373,8 +380,8 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
 
       if (_tlc_strncmp(ld_dir, libc_dir, libc_dir_len) == 0 &&
           (ld_dir[libc_dir_len] == '\0' || ld_dir[libc_dir_len] == ':')) {
-        info.ld_dir = nullptr;  // reuse current LD_LIBRARY_PATH
-        alloc_sz = 0;
+        info.ld_dir = nullptr;      // reuse current LD_LIBRARY_PATH
+        alloc_sz = interp_path_sz;  // only insert interp path
         break;
       }
 
