@@ -1,7 +1,7 @@
 # chlibc
 
-A lightweight 64bit Linux userspace loader that enables running programs with a custom glibc environment.
-It dynamically intercepts execution and redirects the target process to a specified runtime (e.g. Conda sysroot or custom glibc build).
+A lightweight 64-bit Linux userspace tool that lets you run any dynamically linked program with a **custom glibc** (Conda, custom build, or alternate sysroot).
+It uses ptrace to transparently replace the dynamic linker (`PT_INTERP`) and libc at every `execve` — no containers, no binary patching, no `LD_*` env hacks.
 
 ## Runtime Kernel Requirements
 
@@ -21,10 +21,12 @@ chlibc <target_program> [args...]
 
 ### Environment Variables
 
-- `CHLIBC_INTERP`: Path to target dynamic linker (e.g. ld-linux-x86-64.so.2)
-- `CHLIBC_GLIBC_HOME`: Root directory of custom glibc
-- `CHLIBC_PREFIX`: Override project root path, only replace the interp and glibc when the elf is under this directory.
-- `CONDA_PREFIX`: When set, automatically detects the previous three environments
+| Variable            | Description                                                 |
+|---------------------|-------------------------------------------------------------|
+| `CONDA_PREFIX`      | Auto-detects everything (recommended)                       |
+| `CHLIBC_INTERP`     | Path to target dynamic linker (e.g. `ld-linux-x86-64.so.2`) |
+| `CHLIBC_GLIBC_HOME` | Root directory of custom glibc                              |
+| `CHLIBC_PREFIX`     | Only replace when binary is under this path                 |
 
 ### Example
 
@@ -47,6 +49,8 @@ Requirements
 ./pixiw run configure
 ./pixiw run build
 ```
+
+Using `pixi`, builds are fully reproducible.
 
 ### Manual build
 
