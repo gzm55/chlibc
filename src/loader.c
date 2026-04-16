@@ -351,10 +351,11 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
     }
 
     base = (uint8_t *)rst - m->vaddr;
-    auxv[rflags.at_base_idx].a_un.a_val = (uintptr_t)base;  // save new base
 
     ++m;
   }
+
+  auxv[rflags.at_base_idx].a_un.a_val = (uintptr_t)base;  // save new base
 
   for (; m < mmap_params_end; ++m) {
     auto const rst = (uintptr_t)loader_mmap(base, m, 0, fd, sys_conf);

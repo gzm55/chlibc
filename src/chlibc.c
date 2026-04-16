@@ -1137,16 +1137,12 @@ static inline pt_result_t _pt_check_rst(const pid_t pid, const ptrace_return_t r
 #define PT_OK_CALL(exp, ...) PT_OK_CALL_CHK(exp, true __VA_OPT__(, ) __VA_ARGS__)
 
 static inline bool pt_cont(const pid_t pid, const int sig) {
-  DEBUG(pid, 0, sig, "PTRACE_CONT");
+  DEBUG(pid, 0, sig, "restart with PTRACE_CONT");
   return PT_SUCCESS(PT_CALL(PTRACE_CONT, pid, 0, sig));
 }
 static inline bool pt_singlestep(const pid_t pid, const int sig) {
-  DEBUG(pid, 0, 0, "PTRACE_SINGLESTEP");
+  DEBUG(pid, 0, 0, "restart with PTRACE_SINGLESTEP");
   return PT_SUCCESS(PT_CALL(PTRACE_SINGLESTEP, pid, 0, sig));
-}
-static inline bool pt_syscall(const pid_t pid, const int sig) {
-  DEBUG(pid, 0, 0, "PTRACE_SYSCALL");
-  return PT_SUCCESS(PT_CALL(PTRACE_SYSCALL, pid, 0, sig));
 }
 static inline pt_result_t pt_get_msg(const pid_t pid) {
   unsigned long msg = 0;
@@ -1678,7 +1674,7 @@ typedef enum {
   HTRAP_FATAL
 } handle_trap_result_t;
 
-static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t *const exec_arg) {
+static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[static 1]) {
   common_regs_t regs;
   PT_OK_CALL(pt_get(pid, &regs), return HEXEC_FAIL_DOWNLOAD);
 
@@ -1847,7 +1843,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
   return HTRAP_FAIL_SAFE;
 }
 
-static void restore_env_path(const pid_t pid, const exec_arg_t *exec_arg) {
+static void restore_env_path(const pid_t pid, const exec_arg_t exec_arg[static 1]) {
   auto const libc_dir_len = strlen(target_interp.libc_dir);
 
   auto const l_envp = (const uintptr_t *)(g_buffer + exec_arg->envp_ofs);
@@ -1885,7 +1881,7 @@ static void restore_env_path(const pid_t pid, const exec_arg_t *exec_arg) {
 // exitsig>0 means in the existing stage with the specified signal
 static void process(const pid_t pid, const int status, const int exitsig) {
   if (WIFEXITED(status) || WIFSIGNALED(status)) {
-    DEBUG(pid, 0, 0, "WIFEXITED || WIFSIGNALED");
+    DEBUG(pid, 0, 0, "process WIFEXITED|WIFSIGNALED");
     if (pids_tracee0() == pid)
       ptrace_tracee0_exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     pids_del(pid);
@@ -1902,11 +1898,11 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     // now PTRACE_EVENT stops or syscall-stops.
     switch (status >> 16) {
     case PTRACE_EVENT_EXIT:
-      DEBUG(pid, status >> 16, exitsig, "EVENT_EXIT");
+      DEBUG(pid, status >> 16, exitsig, "process EVENT_EXIT");
       if (pids_tracee0() == pid) {
         auto const r = pt_get(pid);
         if (PT_SUCCESS(r)) {
-          const unsigned long msg = PT_VALUE(r);
+          auto const msg = PT_VALUE(r);
           ptrace_tracee0_exit_code = msg & 0xff ? 128 + (msg & 0xff) : ((msg >> 8) & 0xff);
         }
       }
@@ -1919,7 +1915,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     case PTRACE_EVENT_VFORK:
       [[fallthrough]];
     case PTRACE_EVENT_CLONE: {
-      DEBUG(pid, status >> 16, exitsig, "EVENT_VORK|VFORK|CLONE");
+      DEBUG(pid, status >> 16, exitsig, "process EVENT_VORK|VFORK|CLONE");
       auto const r = pt_get(pid);
       if (PT_SUCCESS(r)) {
         if (exitsig)
@@ -1930,15 +1926,31 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     } break;
 
     case PTRACE_EVENT_EXEC:
-      DEBUG(pid, status >> 16, exitsig, "EVENT_EXEC");
-      if (0 == exitsig && pt_syscall(pid, deliver_sig))
-        // On EVENT_EXEC, the tracee is non-dumpable, and syscall-ret is not set to 0.
-        // Let it go to execve exit-stop to handle exec event.
-        return;
+      DEBUG(pid, status >> 16, exitsig, "process EVENT_EXEC");
+      if (0 == exitsig) {
+        exec_arg_t exec_arg;
+        switch (handle_exec(pid, &exec_arg)) {
+        case HEXEC_OK:
+          break;
+        case HEXEC_SKIP:
+          restore_env_path(pid, &exec_arg);
+          break;
+        case HEXEC_FAIL_SAFE:
+          DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
+          restore_env_path(pid, &exec_arg);
+          break;
+        case HEXEC_FAIL_DOWNLOAD:
+          DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL and cannot fix env");
+        default:  // HEXEC_FATAL
+          deliver_sig = SIGKILL;
+          DEBUG(pid, status >> 16, exitsig, "handle_exec FATAL: cannot jump to loader_loader()");
+          break;
+        }
+      }
       break;
 
     case 0:
-      DEBUG(pid, status >> 16, exitsig, "SIGTRAP");
+      DEBUG(pid, status >> 16, exitsig, "process SIGTRAP");
       if (0 == exitsig)
         switch (handle_trap(pid)) {
         case HTRAP_USER:
@@ -1955,37 +1967,14 @@ static void process(const pid_t pid, const int status, const int exitsig) {
           break;
         default:  // HTRAP_FATAL
           deliver_sig = SIGKILL;
-          DEBUG(pid, status >> 16, exitsig, "KILL tracee on non-recoverable errors");
+          DEBUG(pid, status >> 16, exitsig, "handle_trap FATAL: non-recoverable errors");
           break;
         }
       break;
 
     default:
-      DEBUG(pid, status >> 16, exitsig, "unknown ptrace event or non ptrace-stop");
+      DEBUG(pid, status >> 16, exitsig, "process unknown ptrace event or non ptrace-stop");
     }
-
-  } else if (stopsig == (SIGTRAP | 0x80)) {
-    // Only execve exit-stop is captured.
-    // check condition: ret == 0 && syscall nr = SYS_execve
-    exec_arg_t exec_arg;
-    if (0 == exitsig)
-      switch (handle_exec(pid, &exec_arg)) {
-      case HEXEC_OK:
-        break;
-      case HEXEC_SKIP:
-        restore_env_path(pid, &exec_arg);
-        break;
-      case HEXEC_FAIL_SAFE:
-        DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL");
-        restore_env_path(pid, &exec_arg);
-        break;
-      case HEXEC_FAIL_DOWNLOAD:
-        DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL and cannot fix env");
-      default:  // HEXEC_FATAL
-        deliver_sig = SIGKILL;
-        DEBUG(pid, status >> 16, exitsig, "FATAL: cannot jump to loader_loader()");
-        break;
-      }
 
   } else {
     // now signal-delivery-stops or group-stops
@@ -1995,7 +1984,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     case SIGKILL:
       [[fallthrough]];
     case SIGCHLD:
-      DEBUG(pid, 0, stopsig, "SIGKILL/SIGCHLD/SIGCONT");
+      DEBUG(pid, 0, stopsig, "process SIGKILL/SIGCHLD/SIGCONT");
       deliver_sig = stopsig;
       break;
 
@@ -2010,7 +1999,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     case SIGSEGV:
       [[fallthrough]];
     case SIGSYS:
-      DEBUG(pid, 0, stopsig, "Core Dump Signals");
+      DEBUG(pid, 0, stopsig, "process Core Dump Signals");
       deliver_sig = exitsig == SIGKILL ? SIGKILL : stopsig;
       break;
 
@@ -2028,11 +2017,11 @@ static void process(const pid_t pid, const int status, const int exitsig) {
             SIGSTOP == stopsig && (SI_USER == si.si_code || SI_KERNEL == si.si_code) && 0 == si.si_pid;
         if (first_stop) {
           deliver_sig = 0;
-          DEBUG(pid, status >> 16, stopsig, "Attached SIGSTOP");
+          DEBUG(pid, status >> 16, stopsig, "process Attached SIGSTOP");
         } else
-          DEBUG(pid, status >> 16, stopsig, "Stop Signals");
+          DEBUG(pid, status >> 16, stopsig, "process Stop Signals");
       } else if (PT_IS_GROUP_STOP(stopsig, PT_ERRNO(r))) {
-        DEBUG(pid, status >> 16, stopsig, "Group-stop Signals");
+        DEBUG(pid, status >> 16, stopsig, "process Group-stop Signals");
         ptrace_has_group_stopped = true;
         return;  // in PTRACE_ATTACH mode, leave the tracees stopped
       }
