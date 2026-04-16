@@ -1,8 +1,8 @@
 #include "loader.h"
 
 // syscall:   x0      <- x8(x0, x1, x2, x3, x4, x5)
-// function:  x0      <- x8(x0, x1, x2, x3, x4, x5)
-//           (x0, x1) <- x8(x0, x1, x2, x3, x4, x5)
+// function:  x0      <- function(x0, x1, x2, x3, x4, x5, x6, x7)
+//           (x0, x1) <- function(x0, x1, x2, x3, x4, x5, x6, x7)
 // callee-saved: x19--x28
 
 // Prepares registers and load segments for loader().
@@ -21,7 +21,7 @@ void loader_loader() {
   //    x4: filesz
   //    x5: 0
   //    x20: loader_offset
-  //    [rsp] = [mmap, R-X]
+  //    [sp] = [mmap, R-X]
   __asm__ volatile(
       ".global loader_loader_entry, loader_loader_end;"
 
@@ -30,22 +30,22 @@ void loader_loader() {
       "mov x8, %[exit];"
 
       "loader_loader_entry:"
-      // entry: [x8=openat x0=0 x1=chlibc_path x2=O_RDONLY(0)] x3=priv x4=filesz x5=0 x19=&loader_loader
-      //        [rsp] = [mmap, R-X]
+      // entry: [x8=openat x0=0 x1=chlibc_path x2=O_RDONLY(0)] x3=priv x4=filesz x5=0 x20=loader_offset
+      //        [sp] = [mmap, R-X]
       // exit: [x0=exit x0=exit]
       "svc #0;"
 
-      // x8=openat x0=fd? x1=chlibc_path x2=&loader_loader x3=priv x4=filesz x5=0
-      //    [rsp] = [mmap, R-X]
+      // x8=openat x0=fd? x1=chlibc_path x2=O_RDONLY(0) x3=priv x4=filesz x5=0 x20=loader_offset
+      //    [sp] = [mmap, R-X]
       "ldp x8, x2, [sp], #16;"
-      // x8=mmap x0=fd? x1=chlibc_path x2=R-X x3=priv x4=filesz x5=0
+      // x8=mmap x0=fd? x1=chlibc_path x2=R-X x3=priv x4=filesz x5=0 x20=loader_offset
       "mov x1, x4;"
-      // x8=mmap x0=fd? x1=filesz x2=R-X x3=priv x4=filesz x5=0
+      // x8=mmap x0=fd? x1=filesz x2=R-X x3=priv x4=filesz x5=0 x20=loader_offset
       "mov x4, x0;"
-      // [x8=mmap x0=fd?(hint) x1=filesz x2=R-X x3=priv x4=fd? x5=0]
+      // [x8=mmap x0=fd?(hint) x1=filesz x2=R-X x3=priv x4=fd? x5=0] x20=loader_offset
       "svc #0;"
 
-      // x8=mmap x0=addr? x4=fd? x20=loader_offset
+      // x0=addr? x4=fd? x20=loader_offset
       "adds x20, x20, x0;"
 
       // mmap err is guaranteed overflow the previous adds, since:
@@ -53,7 +53,7 @@ void loader_loader() {
       // -errno in (-4K,0) (by syscall ABI)
       "b.cs quick_exit;"
 
-      // x8=mmap x0=addr x4=fd [x20=&loader]
+      // x0=addr x4=fd [x20=&loader]
       "br x20;"
 
       "loader_loader_end:"
@@ -69,7 +69,7 @@ void loader() {
   //   (x0, x1) <- function(x0, x1, x2, x3, x4, x5, x6, x7)
   // loader() Register ABI
   //   x4:  fd of chlibc elf
-  //   x20: loader base for munmap, saved from rax
+  //   x20: loader base for munmap, saved from x0
   //   x21: loader size for munmap
   //   x22: total mmap range for PIE elf, 0 for non PIE elf
   //   x23: loader_reg_flags_t
@@ -81,11 +81,11 @@ void loader() {
       "mov x1, x22;"               // total_memsz for PIE elf
       "mov x2, x23;"               // loader_reg_flags_t
       "bl loader_main;"            // now x22, x23 can be dropped, x4 is already set to fd
-      "tbnz x0, #63, quick_exit;"  // fail with -errno in rax
+      "tbnz x0, #63, quick_exit;"  // fail with -errno in x0
 
-      "mov x3, sp;"                  // src, reuse x0 and x1
-      "ldr x2, [x3, #%c[reg_off]];"  // dst
-      "mov sp, x2;"
+      "ldr x2, [sp, #%c[reg_off]];"  // dst, reuse x0 and x1
+      "mov x3, sp;"                  // src
+      "mov sp, x2;"                  // allocate space
 
       "bl loader_fix_stack;"
 

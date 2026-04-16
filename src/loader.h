@@ -43,6 +43,7 @@ typedef struct user_pt_regs common_regs_t;
 #  define _M_SYS_ARG5 regs[4]
 #  define _M_SYS_ARG6 regs[5]
 #  define _M_SYS_RET regs[0]
+#  define _M_S0 regs[19]
 #  define _M_S1 regs[20]
 #  define _M_S2 regs[21]
 #  define _M_S3 regs[22]
@@ -62,6 +63,7 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_SYS_ARG5 a4
 #  define _M_SYS_ARG6 a5
 #  define _M_SYS_RET a0
+#  define _M_S0 s0
 #  define _M_S1 s1
 #  define _M_S2 s2
 #  define _M_S3 s3

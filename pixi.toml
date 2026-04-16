@@ -40,6 +40,7 @@ build = [{ task = "build-x86_64" }, { task = "build-aarch64" }]
 
 _configure-clang-x86_64 = "cmake --preset clang-x86_64 -S ."
 _configure-clang-aarch64 = "cmake --preset clang-aarch64 -S ."
+_configure-clang-riscv64 = "cmake --preset clang-riscv64 -S ."
 
 build-x86_64 = [
   { task = "_build-clang-x86_64-release" },
@@ -50,11 +51,17 @@ build-aarch64 = [
   { task = "_build-clang-aarch64-release" },
   { task = "_build-clang-aarch64-debug" },
 ]
+build-riscv64 = [
+  { task = "_build-clang-riscv64-release" },
+  { task = "_build-clang-riscv64-debug" },
+]
 
 _build-clang-x86_64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-x86_64-release"
 _build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
 _build-clang-aarch64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-aarch64-release"
 _build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
+_build-clang-riscv64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-riscv64-release"
+_build-clang-riscv64-debug = "./cmake-build --preset clang-riscv64-debug"
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"
@@ -68,9 +75,13 @@ compiler-rt_linux-64 = "*"
 compiler-rt_linux-aarch64 = "*"
 lld = "*"
 cmakelang = '*'
-sysroot_linux-aarch64 = "*"
 sysroot_linux-64 = "*"
+sysroot_linux-aarch64 = "*"
 llvm-tools = "*"
+
+## riscv64 target cross building is not supported
+## package compiler-rt_linux-riscv64 is missing
+# sysroot_linux-riscv64 = "*"
 
 lefthook = ">=1.13.1"
 pre-commit-hooks = "*"

@@ -1751,7 +1751,7 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   regs._M_SYS_ARG5 = SYS_mmap;
   regs._M_SYS_ARG6 = loader_info.filesz;
   regs._M_S0 = SYS_open;
-#else  // defined(ARCH_ARM64)
+#elif defined(ARCH_ARM64)
   regs._M_SYS_NR = SYS_openat;       // no open() syscall
   regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
   regs._M_SYS_ARG2 = r_chlibc_path;  // absolute path
@@ -1763,6 +1763,17 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   // stack grows downwards
   (*g_loader_loader_param)[1] = PROT_READ | PROT_EXEC | g_sc.prot_bti;  // to x2
   (*g_loader_loader_param)[0] = SYS_mmap;                               // to x8
+#else  // defined(ARCH_RISCV64)
+  regs._M_SYS_NR = SYS_openat;       // no open() syscall
+  regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
+  regs._M_SYS_ARG2 = r_chlibc_path;  // absolute path
+  regs._M_SYS_ARG3 = O_RDONLY;
+  regs._M_SYS_ARG4 = MAP_PRIVATE;
+  regs._M_SYS_ARG5 = loader_info.filesz;
+  regs._M_SYS_ARG6 = 0;
+  regs._M_S0 = SYS_exit;
+  regs.s10 = PROT_READ | PROT_EXEC;
+  regs.s11 = SYS_mmap;
 #endif
 
   // Upload to stack

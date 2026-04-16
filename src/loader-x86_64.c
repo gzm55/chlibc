@@ -1,8 +1,8 @@
 #include "loader.h"
 
 // syscall:   rax       <- rax(rdi, rsi, rdx, r10, r8, r9)
-// function:  rax       <- rax(rdi, rsi, rdx, rcx, r8, r9)
-//           (rax, rdx) <- rax(rdi, rsi, rdx, rcx, r8, r9)
+// function:  rax       <- function(rdi, rsi, rdx, rcx, r8, r9)
+//           (rax, rdx) <- function(rdi, rsi, rdx, rcx, r8, r9)
 // callee-saved: rbx, rbp, r12, r13, r14, r15
 
 // Prepares registers and load segments for loader().

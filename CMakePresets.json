@@ -33,6 +33,12 @@
       "inherits": "base"
     },
     {
+      "name": "clang-riscv64",
+      "displayName": "Linux Cross-Compile for ${presetName}",
+      "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
+      "inherits": "base"
+    },
+    {
       "name": "gcc-x86_64",
       "displayName": "Linux Cross-Compile for ${presetName}",
       "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
@@ -59,6 +65,16 @@
     {
       "name": "clang-aarch64-release",
       "configurePreset": "clang-aarch64",
+      "configuration": "Release"
+    },
+    {
+      "name": "clang-riscv64-debug",
+      "configurePreset": "clang-riscv64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "clang-riscv64-release",
+      "configurePreset": "clang-riscv64",
       "configuration": "Release"
     },
     {
