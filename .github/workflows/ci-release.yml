@@ -36,6 +36,29 @@ jobs:
           sha256sum build/clang-x86_64/bin/chlibc
           sha256sum build/clang-aarch64/bin/chlibc
 
+      - name: Verify Checksums against Tag Message
+        if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "Extracting expected checksums from git tag..."
+          TAG_MSG=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+
+          EXPECTED_X64=$(echo "$TAG_MSG" | grep "chlibc-x86_64" | awk '{print $1}')
+          EXPECTED_AARCH64=$(echo "$TAG_MSG" | grep "chlibc-aarch64" | awk '{print $1}')
+
+          ACTUAL_X64=$(sha256sum build/clang-x86_64/bin/chlibc | awk '{print $1}')
+          ACTUAL_AARCH64=$(sha256sum build/clang-aarch64/bin/chlibc | awk '{print $1}')
+
+          echo "Expected (Tag) x64: $EXPECTED_X64"
+          echo "Actual   (Bin) x64: $ACTUAL_X64"
+          echo "Expected (Tag) ARM: $EXPECTED_AARCH64"
+          echo "Actual   (Bin) ARM: $ACTUAL_AARCH64"
+
+          if [ "$EXPECTED_X64" != "$ACTUAL_X64" ] || [ "$EXPECTED_AARCH64" != "$ACTUAL_AARCH64" ]; then
+            echo "Checksum mismatch! The built binary does not match the tag message."
+            exit 1
+          fi
+          echo "Checksums verified."
+
       - name: Prepare Release Artifacts
         if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
         run: |
