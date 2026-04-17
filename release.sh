@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(git status --porcelain -uno)" ]; then
     echo "Error: Working directory is not clean."
+    git status -uno
     exit 1
 fi
 
 ./pixiw run lint
 ./pixiw run build
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(git status --porcelain -uno)" ]; then
     echo "Error: Working directory is not clean after building."
+    git status -uno
     exit 1
 fi
 
