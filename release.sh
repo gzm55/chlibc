@@ -32,6 +32,10 @@ git commit -m "chore: release v$RELEASE_VERSION"
 # build again for the new hash after setting version
 ./pixiw run build
 
+sleep 1
+sha256sum build/clang-x86_64/bin/chlibc
+sha256sum build/clang-aarch64/bin/chlibc
+
 SHA256_X64=$(sha256sum build/clang-x86_64/bin/chlibc | awk '{print $1}')
 SHA256_AARCH64=$(sha256sum build/clang-aarch64/bin/chlibc | awk '{print $1}')
 
