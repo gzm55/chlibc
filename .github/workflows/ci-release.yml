@@ -42,6 +42,9 @@ jobs:
           echo "Extracting expected checksums from git tag..."
           TAG_MSG=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
 
+          echo "$TAG_MSG"
+          echo "$TAG_MSG" | xxd
+
           EXPECTED_X64=$(echo "$TAG_MSG" | grep "chlibc-x86_64" | awk '{print $1}')
           EXPECTED_AARCH64=$(echo "$TAG_MSG" | grep "chlibc-aarch64" | awk '{print $1}')
 
