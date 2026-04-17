@@ -68,9 +68,15 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_S2 s2
 #  define _M_S3 s3
 #  define _M_S4 s4
-#  define TRAP_OP_NEXT 2
+#  define TRAP_OP_NEXT 2  // compressed instruction
 #  define LOADER_LOADER_SP (0 * 8)
 
+#endif
+
+#ifdef ARCH_X64
+#  define _M_SYS_NR_ORIG orig_rax
+#else
+#  define _M_SYS_NR_ORIG _M_SYS_NR
 #endif
 
 static_assert(sizeof(uintptr_t) == sizeof_member(common_regs_t, _M_PC));
@@ -172,8 +178,6 @@ static_assert(sizeof(loader_reg_flags_t) == sizeof(uint64_t));
 void loader_loader();
 void loader_loader_end();
 void loader_loader_entry();
-extern const uint8_t trap_ok_marker[];
-extern const uint8_t trap_munmap_fail_marker[];
 
 #ifdef ARCH_X64
 void loader_fix_stack(void *, const void *, const char **, size_t);
@@ -182,6 +186,8 @@ void loader_fix_stack(size_t, const char **, void *, const void *);
 #endif
 
 void loader();
+extern const uint8_t trap_ok_marker[];
+extern const uint8_t trap_munmap_fail_marker[];
 
 typedef struct {
   int64_t stacksz;

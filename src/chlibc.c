@@ -14,6 +14,10 @@
 #  error "Requires Little-endian. Compilation aborted."
 #endif
 
+#if __SIZEOF_POINTER__ != 8
+#  error "Requires 64-bit address space"
+#endif
+
 #if !defined(__GNUC__)
 #  error "This project is strictly optimized for GCC/Clang compilers."
 #endif
@@ -59,7 +63,6 @@
 #  include <linux/ptrace.h>
 #endif
 
-// #include "common.h"
 #include "loader.h"
 
 #if defined(ARCH_X64)
@@ -1407,6 +1410,24 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
   _OK_CALL(ptrace(PTRACE_SETOPTIONS, child, 0, options_w_exitkill), _ != -1, kill9_child_and_exit(child, 71));
 #endif
 
+  // test common_regs_t
+#ifdef ARCH_X64
+  if (g_sc.has_ptrace_getregset)
+#endif
+  {
+    union {
+      common_regs_t regs;
+      char data[1024];
+    } regs_buffer;
+    static_assert(sizeof(regs_buffer) == sizeof(regs_buffer.data));
+    static_assert(sizeof(regs_buffer) > sizeof(regs_buffer.regs));
+    struct iovec iov = {.iov_base = &regs_buffer, .iov_len = sizeof(regs_buffer)};
+    auto const r = PT_CALL_S(PTRACE_GETREGSET, child, NT_PRSTATUS, &iov);
+    // when the first child is just attached, it must be a 64bit native process
+    if (PT_FAIL(r) || iov.iov_len != sizeof(regs_buffer.regs))
+      kill9_child_and_exit(child, 72);
+  }
+
   // process term signals before continue child, ignore others
   {
     auto const signals = atomic_exchange_explicit(&pending_signal, 0, memory_order_relaxed);
@@ -1415,7 +1436,7 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
 
   // begin trace the first tracee
   pids_add(child);
-  _OK_CALL(ptrace(PTRACE_CONT, child, 0, 0), _ != -1, kill9_child_and_exit(child, 72));
+  _OK_CALL(ptrace(PTRACE_CONT, child, 0, 0), _ != -1, kill9_child_and_exit(child, 73));
 }
 
 static uint_fast32_t process_signals() {
@@ -1511,6 +1532,7 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
   exec_arg->end_ofs = ofs;
 
   // analyze aux table
+  exec_arg->at_base_idx = exec_arg->at_pagesz_idx = -1;
   memset(exec_arg->auxv_map, 0, sizeof(exec_arg->auxv_map));
   {
     uint8_t i = 0;
@@ -1530,9 +1552,8 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
   }
 
   // AT_BASE is required for munmap() old interp
-  // AT_EXECFN is required for restoring when error
-  if (!exec_arg->auxv_map[AT_BASE] || !exec_arg->auxv_map[AT_EXECFN] || !exec_arg->auxv_map[AT_PHDR] ||
-      !exec_arg->auxv_map[AT_ENTRY] || !exec_arg->auxv_map[AT_PHNUM] ||
+  if (exec_arg->at_base_idx == (uint8_t)0xff || exec_arg->at_pagesz_idx == (uint8_t)0xff ||
+      !exec_arg->auxv_map[AT_PHDR] || !exec_arg->auxv_map[AT_ENTRY] || !exec_arg->auxv_map[AT_PHNUM] ||
       exec_arg->auxv_map[AT_PHENT] != sizeof(Elf64_Phdr)) {
     DEBUG(pid, 0, 0, "non standard elf");
     return false;
@@ -1678,6 +1699,14 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   common_regs_t regs;
   PT_OK_CALL(pt_get(pid, &regs), return HEXEC_FAIL_DOWNLOAD);
 
+  // For x64, after read general registers successfully, the tracee may still in X32 or IA32 modes. We only support
+  // native X64 mode.
+  // For aarch64/riscv64 arch, the aarch32 and rv32 tracees always fail the pt_get(pid, &regs).
+#ifdef ARCH_X64
+  if (regs._M_SYS_NR_ORIG != SYS_execve)
+    return HEXEC_FAIL_DOWNLOAD;
+#endif
+
   if (!parse_exec_arg(pid, regs._M_SP, regs._M_PC, exec_arg))  // rsp aligns to 16 bytes via 64bit Linux ABI
     return exec_arg->auxv_ofs ? HEXEC_FAIL_SAFE : HEXEC_FAIL_DOWNLOAD;
 
@@ -1802,6 +1831,9 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
 static handle_trap_result_t handle_trap(const pid_t pid) {
   common_regs_t regs;
   PT_OK_CALL(pt_get(pid, &regs), return HTRAP_FAIL_SAFE);
+  // Note: the aarch32&rv32 tracees will not reach here. So a TRAP_BRKPT will hang the tracees, and also the chlibc
+  // itself.
+
   auto ok_result = HTRAP_LOADER_DONE;
 
   auto const r = pt_read_word_quiet(pid, regs._M_PC);
@@ -1826,6 +1858,10 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     siginfo_t si = {.si_signo = SIGTRAP};
     PT_OK_CALL(pt_get(pid, &si), return HTRAP_FATAL);
     if (si.si_code == TRAP_BRKPT) {
+#  ifdef RISCV64
+      if ((v & 0x3) == 0x3)
+        regs._M_PC += TRAP_OP_NEXT;  // for riscv64 full 4 bytes instruction
+#  endif
       regs._M_PC += TRAP_OP_NEXT;
       PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
     }
@@ -1833,7 +1869,17 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     return HTRAP_USER;  // skip unknown trap
   }
 
-  if (PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) {  // loader() is unloaded
+  auto const trap_munmap_fail_marker_vaddr =
+      loader_info.entry_vaddr + (uintptr_t)trap_munmap_fail_marker - (uintptr_t)&loader;
+  auto const loader_base =
+#ifdef ARCH_X64
+      regs._M_SYS_ARG1;
+#else
+      regs._M_S1;
+#endif
+  if ((PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) && regs._M_SYS_NR_ORIG == SYS_munmap &&
+      regs._M_SYS_ARG2 == loader_info.filesz &&
+      (regs._M_PC - loader_base) == trap_munmap_fail_marker_vaddr) {  // loader() is just unloaded
   jmp_interp:
     auto const curr_sp = regs._M_SP;
     // download restoring regs

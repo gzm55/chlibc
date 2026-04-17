@@ -8,6 +8,9 @@
 #include <stdlib.h>
 
 #if defined(__x86_64__)
+#  ifdef __ILP32__
+#    error "Requires x86_64 LP64 ABI, not x32 ILP32 ABI."
+#  endif
 #  define ARCH_X64
 #elif defined(__aarch64__)
 #  define ARCH_ARM64
