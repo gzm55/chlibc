@@ -22,10 +22,18 @@ RELEASE_VERSION=$(echo "$RAW_VERSION" | sed 's/-dev//')
 echo "Bumping version to release: $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
 
-# commit 和 annotated tag va.b.c
+# commit and annotated tag va.b.c
 git add pixi.toml
 git commit -m "chore: release v$RELEASE_VERSION"
-git tag -a "v$RELEASE_VERSION" -m "version $RELEASE_VERSION"
+
+echo "Calculating SHA256 checksums for tag message..."
+SHA256_X64=$(sha256sum build/clang-x86_64/bin/chlibc | awk '{print $1}')
+SHA256_AARCH64=$(sha256sum build/clang-aarch64/bin/chlibc | awk '{print $1}')
+
+TAG_MSG=$(printf "version %s\n\nSHA256 Checksums:\n%s  chlibc-x86_64\n%s  chlibc-aarch64" \
+    "$RELEASE_VERSION" "$SHA256_X64" "$SHA256_AARCH64")
+
+git tag -a "v$RELEASE_VERSION" -m "$TAG_MSG"
 
 # bump version in pixi.toml: a.b.c -> a.b.(c+1)-dev
 MAJOR=$(echo "$RELEASE_VERSION" | cut -d. -f1)
