@@ -15,6 +15,8 @@ echo "Running build..."
 
 # bump version in pixi.toml: a.b.c-dev -> a.b.c
 RAW_VERSION=$(./pixiw workspace version)
+echo "$RAW_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-dev$' \
+|| { echo "Error: Version not in a.b.c-dev format."; exit 1; }
 RELEASE_VERSION=$(echo "$RAW_VERSION" | sed 's/-dev//')
 
 echo "Bumping version to release: $RELEASE_VERSION"

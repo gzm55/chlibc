@@ -1,0 +1,80 @@
+---
+name: CI & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.62.0
+          cache: true
+
+      - name: Lint
+        run: pixi run lint
+
+      - name: Build All Architectures
+        run: pixi run build
+
+      - name: Prepare Release Artifacts
+        if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p artifacts
+
+          # Extract binaries based on CMakePresets.json binaryDir structure
+          cp build/clang-x86_64/bin/chlibc artifacts/chlibc-x86_64
+          cp build/clang-aarch64/bin/chlibc artifacts/chlibc-aarch64
+
+          # Generate SHA256 checksums
+          cd artifacts
+          sha256sum chlibc-x86_64 > chlibc-x86_64.sha256
+          sha256sum chlibc-aarch64 > chlibc-aarch64.sha256
+          cat *.sha256 > checksums.txt
+
+      - name: Upload Artifacts for Release
+        if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts/*
+          retention-days: 1
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      # Grant write permission exclusively to the release job
+      contents: write
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: Create Release Draft
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/chlibc-x86_64
+            artifacts/chlibc-aarch64
+            artifacts/*.sha256
+            artifacts/checksums.txt
