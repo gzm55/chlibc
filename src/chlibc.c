@@ -30,6 +30,10 @@
 #  error "This project requires Glibc and its extension features."
 #endif
 
+#ifndef PROJECT_VERSION_STR
+#  define PROJECT_VERSION_STR "dev"
+#endif
+
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -2222,7 +2226,7 @@ int main(const int argc, char *const argv[]) {
     return 64;
   }
   if (1 == argc) {
-    _OK_CALL(printf("Usage: %s <cmd> [argv...]\n", *argv), _ > 0);
+    _OK_CALL(printf("chlibc %s\nUsage: %s <cmd> [argv...]\n", PROJECT_VERSION_STR, *argv), _ > 0);
     return 0;
   }
 

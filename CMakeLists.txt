@@ -9,7 +9,18 @@ set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES
     "${CMAKE_SOURCE_DIR}/cmake/toolchain/top-include.cmake"
     CACHE FILEPATH "")
 
-project(chlibc C)
+# cmake-lint: disable=W0106
+if(DEFINED ENV{PIXI_PROJECT_VERSION})
+  set(PROJECT_VERSION_RAW "$ENV{PIXI_PROJECT_VERSION}")
+else()
+  set(PROJECT_VERSION_RAW "0.1.0-dev")
+endif()
+string(REGEX MATCH "^[0-9]+\\.[0-9]+\\.[0-9]+" PROJECT_VERSION_NUM "${PROJECT_VERSION_RAW}")
+
+project(
+  chlibc
+  VERSION ${PROJECT_VERSION_NUM}
+  LANGUAGES C)
 
 # output dir
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
@@ -103,7 +114,8 @@ target_compile_options(
 )
 
 add_executable(chlibc src/chlibc.c)
-target_compile_definitions(chlibc PRIVATE _GNU_SOURCE) # enable GNU extension header features
+target_compile_definitions(
+  chlibc PRIVATE PROJECT_VERSION_STR="${PROJECT_VERSION_RAW}" _GNU_SOURCE) # enable GNU extension header features
 target_link_libraries(chlibc PRIVATE chlibc-loader)
 add_custom_command(
   TARGET chlibc
