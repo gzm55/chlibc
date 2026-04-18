@@ -4,7 +4,7 @@
 #  endif
 // Runtime kernel requirement:
 //   X64:     Linux >= 2.6.18
-//   AMD64:   Linux >= 3.19
+//   ARM64:   Linux >= 3.19
 //   RISCV64: Linux >= 5.4
 #else
 #  error "Requires Linux. Compilation aborted."

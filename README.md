@@ -5,11 +5,11 @@ It uses ptrace to transparently replace the dynamic linker (`PT_INTERP`) and lib
 
 ## Runtime Kernel Requirements
 
-| Architecture   | Minimum Kernel Version |
-|----------------|------------------------|
-| x86_64 (X64)   | Linux >= 2.6.18        |
-| AMD64          | Linux >= 3.19          |
-| RISC-V 64      | Linux >= 5.4           |
+| Architecture | Minimum Kernel Version |
+|--------------|------------------------|
+| x86_64 (X64) | Linux >= 2.6.18        |
+| aarch64      | Linux >= 3.19          |
+| RISC-V 64    | Linux >= 5.4           |
 
 ## Usage
 
