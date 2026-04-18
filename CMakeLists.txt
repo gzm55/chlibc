@@ -152,6 +152,8 @@ add_custom_command(
   COMMENT "Checking $<TARGET_FILE_NAME:chlibc>..."
   VERBATIM)
 
+install(TARGETS chlibc RUNTIME DESTINATION bin)
+
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})
 

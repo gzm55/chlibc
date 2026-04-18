@@ -19,14 +19,27 @@ It uses ptrace to transparently replace the dynamic linker (`PT_INTERP`) and lib
 chlibc <target_program> [args...]
 ```
 
+### Path Configuration
+
+Three paths control chlibc's behavior, auto-discovered in priority order:
+
+| Path               | Variable            | Fallback Chain                                                              | Purpose                                                                                                                         |
+| ------------------ | ------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Interpreter**    | `CHLIBC_INTERP`     | `CHLIBC_GLIBC_HOME` → `CONDA_PREFIX` → `dirname($0)/../<arch>/sysroot`      | Target dynamic linker (`ld.so`).   |
+| **GLIBC Home**     | `CHLIBC_GLIBC_HOME` | `CONDA_PREFIX` → `dirname(CHLIBC_INTERP)` → `dirname($0)/../<arch>/sysroot` | Custom glibc root directory. Injected as first entry in `LD_LIBRARY_PATH`.                  |
+| **Prefix / Scope** | `CHLIBC_PREFIX`     | `CONDA_PREFIX` → `dirname($0)/..`                                           | Replacement scope limit. Only binaries under this path (`/proc/<pid>/exe`) are intercepted. |
+
+
 ### Environment Variables
 
-| Variable            | Description                                                 |
-|---------------------|-------------------------------------------------------------|
-| `CONDA_PREFIX`      | Auto-detects everything (recommended)                       |
-| `CHLIBC_INTERP`     | Path to target dynamic linker (e.g. `ld-linux-x86-64.so.2`) |
-| `CHLIBC_GLIBC_HOME` | Root directory of custom glibc                              |
-| `CHLIBC_PREFIX`     | Only replace when binary is under this path                 |
+| Variable             | Description                                                                 |
+|----------------------|-----------------------------------------------------------------------------|
+| `CONDA_PREFIX`       | Auto-detects everything (recommended)                                       |
+| `CHLIBC_INTERP`      | Path to target dynamic linker (e.g. `ld-linux-x86-64.so.2`)                 |
+| `CHLIBC_GLIBC_HOME`  | Root directory of custom glibc                                              |
+| `CHLIBC_PREFIX`      | Only replace when binary is under this path                                 |
+| `CHLIBC_LOGGER_FILE` | Path to log file. If unset, defaults to stderr (if TTY) or syslog fallback. |
+
 
 ### Example
 
