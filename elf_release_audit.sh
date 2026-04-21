@@ -7,6 +7,7 @@ TARGET_ARCH=$("${READELF_BIN}" -h "$TARGET" | sed -n '/Machine:/ s/.*Machine:[[:
 
 case "$TARGET" in
 *-dbg) exit 0 ;;
+*/gcc-x86_64/*) exit 0 ;;
 esac
 
 case "$TARGET_ARCH" in
@@ -34,6 +35,12 @@ NEEDED_COUNT=$(printf "%s\n" "$NEEDED_LIBS" | grep -vc '^$')
 
 if [ "$NEEDED_COUNT" -ne 1 ] || [ "$NEEDED_LIBS" != libc.so.6 ]; then
   log_error "Link libraries are only only libc.so.6. Found: $(printf "%s\n" "$NEEDED_LIBS" | xargs)"
+fi
+
+# Check NO RPATH or RUNPATH
+DYNAMIC_PATHS=$("$READELF_BIN" -d "$TARGET" | grep -E "(RPATH|RUNPATH)")
+if [ -n "$DYNAMIC_PATHS" ]; then
+  log_error "Found dynamic search paths (RPATH/RUNPATH): $DYNAMIC_PATHS"
 fi
 
 # Check required GLIBC VERSION

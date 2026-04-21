@@ -56,12 +56,19 @@ build-riscv64 = [
   { task = "_build-clang-riscv64-debug" },
 ]
 
-_build-clang-x86_64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-x86_64-release"
+_build-clang-x86_64-release = "./cmake-build --preset clang-x86_64-release"
 _build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
-_build-clang-aarch64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-aarch64-release"
+_build-clang-aarch64-release = "./cmake-build --preset clang-aarch64-release"
 _build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
-_build-clang-riscv64-release = "LC_ALL=C TZ=UTC ./cmake-build --preset clang-riscv64-release"
+_build-clang-riscv64-release = "./cmake-build --preset clang-riscv64-release"
 _build-clang-riscv64-debug = "./cmake-build --preset clang-riscv64-debug"
+
+conda-build = [
+  { task = "_build-clang-riscv64-release" },
+  { task = "_build-clang-riscv64-debug" },
+]
+conda-build-x84_64 = "CONDA_OVERRIDE_GLIBC=2.17 rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-64"
+conda-build-aarch64 = "CONDA_OVERRIDE_GLIBC=2.17 rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-aarch64"
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"
@@ -78,6 +85,7 @@ cmakelang = '*'
 sysroot_linux-64 = "*"
 sysroot_linux-aarch64 = "*"
 llvm-tools = "*"
+rattler-build = "*"
 
 ## riscv64 target cross building is not supported
 ## package compiler-rt_linux-riscv64 is missing

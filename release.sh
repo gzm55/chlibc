@@ -49,6 +49,10 @@ echo "Step: Bumping $BUMP_TYPE..."
 ./pixiw workspace version "$BUMP_TYPE"
 
 NEXT_DEV_VERSION=$(./pixiw workspace version get)
+
+# update conda recipe
+sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$NEXT_DEV_VERSION\"/" conda/recipe.yaml
+
 git add pixi.toml
 git commit -m "chore: bump version to $NEXT_DEV_VERSION"
 

@@ -7,7 +7,7 @@ set -e
 
 [ $# != 0 ] || exit 0
 case "$1" in
-*/Debug/*) exit 0 ;; # skip in Debug build
+*-Debug.o) exit 0 ;; # skip in Debug build
 esac
 
 EXIT_STATUS=0

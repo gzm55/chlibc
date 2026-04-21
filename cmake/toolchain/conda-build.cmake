@@ -1,61 +1,51 @@
 message(VERBOSE "Processing ${CMAKE_CURRENT_LIST_FILE}")
 
-# cmake-format: off
-# Toolchain file
-#   - passed from preset.json or cli
-#   - may be executed multiple times when project()
-#   - must be idempotent
-# cmake-format: on
+# unused var from CMAKE_ARGS
+unset(CMAKE_CXX_COMPILER_AR)
+unset(CMAKE_CXX_COMPILER_RANLIB)
+unset(MAKE_FIND_ROOT_PATH_MODE_LIBRARY)
+unset(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY)
+unset(CMAKE_INSTALL_LIBDIR)
+
+# Toolchain file for conda-build, accept most args from conda-build or rattler-build
+if(NOT DEFINED ENV{CONDA_BUILD})
+  message(FATAL_ERROR "CONDA_BUILD variable not set. Please run via 'conda-build' or 'rattler-build'.")
+endif()
 
 # Target System Configuration, only support Linux OS
 set(CMAKE_CROSSCOMPILING TRUE)
-set(CMAKE_SYSTEM_NAME Linux)
-
-cmake_path(GET CMAKE_CURRENT_LIST_FILE STEM _cc_and_arch)
-string(REGEX REPLACE "^([^-]+)-(.*)$" "\\1" _cc "${_cc_and_arch}")
-string(REGEX REPLACE "^([^-]+)-(.*)$" "\\2" CMAKE_SYSTEM_PROCESSOR "${_cc_and_arch}")
-
-if(NOT DEFINED ENV{CONDA_PREFIX})
-  message(FATAL_ERROR "CONDA_PREFIX environment variable not set. Please run via 'pixi run'.")
+set(CMAKE_SYSTEM_NAME
+    "Linux"
+    CACHE STRING "Target System Name")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  message(FATAL_ERROR "Require CMAKE_SYSTEM_NAME=Linux, unsupported operating system: '${CMAKE_SYSTEM_NAME}'.")
 endif()
 
 # Compiler target and sysroot
-set(CMAKE_C_COMPILER_TARGET "${CMAKE_SYSTEM_PROCESSOR}-conda-linux-gnu")
-set(CMAKE_SYSROOT "$ENV{CONDA_PREFIX}/${CMAKE_C_COMPILER_TARGET}/sysroot")
+set(CMAKE_C_COMPILER_TARGET "$ENV{HOST}")
+set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
 
-if(_cc STREQUAL "clang")
-  set(_toolchain_bin_prefix "")
-  set(_toolchain_tool_prefix llvm-)
+if($ENV{CC} MATCHES "clang")
   set(CMAKE_C_PP_FLAGS "--target=${CMAKE_C_COMPILER_TARGET}")
-elseif(_cc STREQUAL "gcc")
-  set(_toolchain_bin_prefix "${CMAKE_C_COMPILER_TARGET}-")
-  set(_toolchain_tool_prefix "${_toolchain_bin_prefix}")
+  set(_toolchain_tool_prefix llvm-)
+elseif($ENV{CC} MATCHES "gcc")
   set(CMAKE_C_PP_FLAGS "")
+  set(_toolchain_tool_prefix "${CMAKE_C_COMPILER_TARGET}-")
 else()
-  message(FATAL_ERROR "Only supports Clang and GCC")
+  message(FATAL_ERROR "Only supports Clang and GCC via CC env, but found '$ENV{CC}'.")
 endif()
 
-set(CMAKE_C_COMPILER "${_toolchain_bin_prefix}${_cc}")
+set(CMAKE_C_COMPILER "$ENV{CC}")
 set(CMAKE_OBJCOPY "${_toolchain_tool_prefix}objcopy")
 set(CMAKE_READELF "${_toolchain_tool_prefix}readelf")
 set(CMAKE_STRIP "${_toolchain_tool_prefix}strip")
 
-# Search Policy (Sysroot Control)
-
-# find header/lib/package under the conda prefix
-set(CMAKE_FIND_ROOT_PATH "${CMAKE_SYSROOT}" "$ENV{CONDA_PREFIX}")
-
-# do not depends on the header/lib on host
-set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-
 # Init flags: append arch specific flags after the user passed (cached) _INIT variables
 
-# restore to cached value from cli arguments and append start markers
 set(CMAKE_C_FLAGS_INIT "$CACHE{CMAKE_C_FLAGS_INIT} -U__CMAKE_C_FLAGS_INIT")
 string(STRIP "${CMAKE_C_FLAGS_INIT}" CMAKE_C_FLAGS_INIT)
 
+# restore to cached value from cli arguments and append start markers
 set(CMAKE_EXE_LINKER_FLAGS_INIT "$CACHE{CMAKE_EXE_LINKER_FLAGS_INIT} -D__CMAKE_EXE_LINKER_FLAGS_INIT") # begin marker
 string(STRIP "${CMAKE_EXE_LINKER_FLAGS_INIT}" CMAKE_EXE_LINKER_FLAGS_INIT)
 
@@ -63,7 +53,8 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:--sort-common")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,relro")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,now")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:--gc-sections")
-if(_cc STREQUAL "clang")
+
+if($ENV{CC} MATCHES "clang")
   # switch linker and runtime lib
   string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -fuse-ld=lld")
   string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " --rtlib=compiler-rt")
@@ -77,7 +68,4 @@ string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -U__CMAKE_EXE_LINKER_FLAGS_INIT") # 
 list(APPEND CMAKE_PROJECT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/per-project-post.cmake")
 list(REMOVE_DUPLICATES CMAKE_PROJECT_INCLUDE)
 
-unset(_cc)
-unset(_cc_and_arch)
-unset(_toolchain_bin_prefix)
 unset(_toolchain_tool_prefix)

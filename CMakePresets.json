@@ -8,16 +8,34 @@
   },
   "configurePresets": [
     {
-      "name": "base",
+      "name": "common",
       "hidden": true,
       "description": "common configurations",
-      "generator": "Ninja Multi-Config",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "toolchainFile": "${sourceDir}/cmake/toolchain/${presetName}.cmake",
       "cacheVariables": {
-        "CMAKE_CONFIGURATION_TYPES": "Debug;Release",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_PROJECT_TOP_LEVEL_INCLUDES": "${sourceDir}/cmake/top-include.cmake"
+      },
+      "environment": {
+        "LC_ALL": "C",
+        "TZ": "UTC"
+      }
+    },
+    {
+      "name": "conda-build",
+      "description": "conda-build configurations",
+      "inherits": "common",
+      "generator": "Ninja"
+    },
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "base configurations for pixi run",
+      "inherits": "common",
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Debug;Release"
       }
     },
     {
@@ -47,6 +65,11 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "conda-build",
+      "configurePreset": "conda-build",
+      "cleanFirst": true
+    },
     {
       "name": "clang-x86_64-debug",
       "configurePreset": "clang-x86_64",

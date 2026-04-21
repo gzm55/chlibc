@@ -6,12 +6,14 @@ set(CMAKE_TOOLCHAIN_FILE
     "${CMAKE_SOURCE_DIR}/cmake/toolchain/clang-x86_64.cmake"
     CACHE FILEPATH "")
 set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES
-    "${CMAKE_SOURCE_DIR}/cmake/toolchain/top-include.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/top-include.cmake"
     CACHE FILEPATH "")
 
 # cmake-lint: disable=W0106
-if(DEFINED ENV{PIXI_PROJECT_VERSION})
-  set(PROJECT_VERSION_RAW "$ENV{PIXI_PROJECT_VERSION}")
+if(DEFINED ENV{PKG_VERSION})
+  set(PROJECT_VERSION_RAW "$ENV{PKG_VERSION}") # rattler-build mode
+elseif(DEFINED ENV{PIXI_PROJECT_VERSION})
+  set(PROJECT_VERSION_RAW "$ENV{PIXI_PROJECT_VERSION}") # pixi run mode
 else()
   set(PROJECT_VERSION_RAW "0.1.0-dev")
 endif()
@@ -76,6 +78,8 @@ add_compile_options($<$<CONFIG:Debug>:-O0>)
 add_compile_options($<$<CONFIG:Debug>:-DENABLE_DEBUG_LOG=1>)
 add_compile_options(-U__CONFIG_ADD_C_FLAGS)
 
+add_link_options(-D__MAIN_ADD_L_FLAGS)
+
 # reproducible build
 add_link_options("-Wl,--build-id=0x6BC42CC7360375F3")
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
@@ -86,14 +90,12 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
   add_link_options(--no-default-config)
 endif()
 
-add_link_options(-D__MAIN_ADD_L_FLAGS)
-
 # enable strip for release
 add_link_options($<$<CONFIG:Release>:-s>)
 
 # disable PIE for old OS on x86_64
 if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  add_link_options(-no-pie LINKER:--hash-style=both LINKER:-z,lazy)
+  add_link_options(-no-pie LINKER:--hash-style=both)
 endif()
 
 add_link_options(-U__MAIN_ADD_L_FLAGS)
@@ -120,10 +122,10 @@ target_link_libraries(chlibc PRIVATE chlibc-loader)
 add_custom_command(
   TARGET chlibc
   PRE_LINK
-  COMMAND "${CMAKE_LINKER}" -r -o "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/$<CONFIG>/loader-linked.o"
+  COMMAND "${CMAKE_LINKER}" -r -o "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/loader-linked-$<CONFIG>.o"
           $<TARGET_OBJECTS:chlibc-loader>
   COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/loader_audit.sh"
-          "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/$<CONFIG>/loader-linked.o"
+          "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/chlibc-loader.dir/loader-linked-$<CONFIG>.o"
   COMMENT "Checking loader objects ..."
   COMMAND_EXPAND_LISTS VERBATIM)
 # process linker script
