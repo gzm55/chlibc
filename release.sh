@@ -25,6 +25,7 @@ fi
 RELEASE_VERSION="${DEV_VERSION%-dev}"
 echo "Step: Setting release version $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
+sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
 
 git add pixi.toml
 git commit -m "chore: release v$RELEASE_VERSION"
