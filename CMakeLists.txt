@@ -86,7 +86,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
    AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"
    AND CMAKE_C_COMPILER_ID MATCHES "Clang")
   # On linux64, the default clang cfg (${CMAKE_C_COMPILER_TARGET}-clang.cfg) always insert -rpath and -rpath-link flags
-  add_link_options(--config "${CMAKE_SOURCE_DIR}/.pixi/envs/default/bin/${CMAKE_C_COMPILER_TARGET}.cfg")
+  add_link_options(--config "$ENV{CONDA_PREFIX}/bin/${CMAKE_C_COMPILER_TARGET}.cfg")
   add_link_options(--no-default-config)
 endif()
 
