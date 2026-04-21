@@ -27,7 +27,7 @@ echo "Step: Setting release version $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
 sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
 
-git add pixi.toml
+git add pixi.toml conda/recipe.yaml
 git commit -m "chore: release v$RELEASE_VERSION"
 
 # build again for the new hash after setting version
@@ -54,7 +54,7 @@ NEXT_DEV_VERSION=$(./pixiw workspace version get)
 # update conda recipe
 sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$NEXT_DEV_VERSION\"/" conda/recipe.yaml
 
-git add pixi.toml
+git add pixi.toml conda/recipe.yaml
 git commit -m "chore: bump version to $NEXT_DEV_VERSION"
 
 echo "Release process for v$RELEASE_VERSION finished. Current: $NEXT_DEV_VERSION"
