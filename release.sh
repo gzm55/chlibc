@@ -17,12 +17,12 @@ if [ -n "$(git status --porcelain -uno)" ]; then
 fi
 
 DEV_VERSION=$(./pixiw workspace version get)
-if [[ ! "$DEV_VERSION" == *-dev ]]; then
-    echo "Error: Current version $DEV_VERSION does not have -dev suffix."
+if [[ ! "$DEV_VERSION" == *.dev ]]; then
+    echo "Error: Current version $DEV_VERSION does not have .dev suffix."
     exit 1
 fi
 
-RELEASE_VERSION="${DEV_VERSION%-dev}"
+RELEASE_VERSION="${DEV_VERSION%.dev}"
 echo "Step: Setting release version $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
 sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml

@@ -1,10 +1,11 @@
 ---
+schema_version: 1
+
 context:
-  name: "chlibc"
-  version: "0.1.4-dev"
+  version: "0.1.4.dev"
 
 package:
-  name: ${{ name }}
+  name: "chlibc"
   version: ${{ version }}
 
 source:
@@ -41,12 +42,14 @@ build:
 requirements:
   build:
     - ${{ compiler('c') }}
+    - ${{ stdlib("c") }}
     - clang
     - compiler-rt_${{ target_platform }}
     - lld
     - llvm-tools
     - cmake >=4.2
     - ninja
+    - clang-tools
   host:
   run:
     - __glibc
@@ -57,9 +60,23 @@ requirements:
     by_name:
       - libgcc
 
+tests:
+  - script:
+      - file $PREFIX/bin/chlibc
+      - sha256sum $PREFIX/bin/chlibc
+      - if: build_platform == target_platform
+        then: $PREFIX/bin/chlibc
+    requirements:
+      build:
+        - file
+        - coreutils
+
 about:
   summary: 'A userspace transparent ld-linux interpreter and glibc swapper.'
-  homepage: https://github.com/gzm55/chlibc
   license: MIT
-  license_file:
-    - LICENSE
+  license_file: LICENSE
+  homepage: https://github.com/gzm55/chlibc
+
+extra:
+  recipe-maintainers:
+    - gzm55
