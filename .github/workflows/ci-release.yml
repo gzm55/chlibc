@@ -33,16 +33,16 @@ jobs:
       - name: Build Conda Packages
         run: pixi run conda-build
 
-      - name: Print Core Binaries Checksums
+      - name: Verify Binaries Checksums
         run: |
           hash_in_pkg() {
             local CONDA_ARCH="$1"
-            local CONDA_PKG=$(pixi run "conda-build-$CONDA_ARCH" --render-only 2>/dev/null
-                              | jq -r '.[0].build_configuration
-                                       | (.directories.build_dir | split("/bld/")[0])
-                                         + "/" + .target_platform + "/"
-                                         + (.subpackages | to_entries[0].value | .name + "-" + .version + "-" + .build_string)
-                                         + ".conda"')
+            local CONDA_PKG=$(pixi run "conda-build-$CONDA_ARCH" --render-only 2>/dev/null |
+                              jq -r '.[0].build_configuration
+                                     | (.directories.build_dir | split("/bld/")[0])
+                                       + "/" + .target_platform + "/"
+                                       + (.subpackages | to_entries[0].value | .name + "-" + .version + "-" + .build_string)
+                                       + ".conda"')
 
             test -e "$CONDA_PKG" || return 1
             unzip -p "$CONDA_PKG" "pkg-*.tar.zst" | tar --zstd -xOf - bin/chlibc | sha256sum | awk '{print $1}'
