@@ -67,8 +67,8 @@ conda-build = [
   { task = "conda-build-x86_64" },
   { task = "conda-build-aarch64" },
 ]
-conda-build-x86_64 = "CONDA_OVERRIDE_GLIBC=2.17 rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-64"
-conda-build-aarch64 = "CONDA_OVERRIDE_GLIBC=2.17 rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-aarch64"
+conda-build-x86_64 = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-64", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
+conda-build-aarch64 = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform aarch64", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"

@@ -2,14 +2,24 @@
 schema_version: 1
 
 context:
-  version: "0.1.4.dev"
+  release_version: "0.1.3"
+  release_hash: 46d6bc9871e03c8296404520c74ab887347a5cab27d3c4d4ca9fa004499ec88d
+  is_dev: ${{ env.exists("_CONDA_BUILD_LOCAL") }}
+  version: ${{ env.get("PIXI_PROJECT_VERSION") if is_dev else release_version }}
+
 
 package:
   name: "chlibc"
   version: ${{ version }}
 
 source:
-  path: ..
+  - if: is_dev
+    then:
+      path: ..
+  - if: not is_dev
+    then:
+      url: https://github.com/gzm55/chlibc/archive/refs/tags/v${{ version }}.tar.gz
+      sha256: ${{ release_hash }}
 
 build:
   skip: ${{ target_platform not in ["linux-64", "linux-aarch64"] }}
