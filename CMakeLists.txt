@@ -112,8 +112,13 @@ target_compile_options(
           -fno-unwind-tables # no unwind tables
           -fno-asynchronous-unwind-tables
           -fno-plt # not PLT
-          -mgeneral-regs-only # no fp & simd registers
 )
+# no fp & simd registers
+if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "powerpc64le")
+  target_compile_options(chlibc-loader PRIVATE -mgeneral-regs-only)
+else()
+  target_compile_options(chlibc-loader PRIVATE -msoft-float -mno-altivec -mno-vsx)
+endif()
 
 add_executable(chlibc src/chlibc.c)
 target_compile_definitions(
@@ -137,6 +142,18 @@ add_custom_command(
   COMMENT "Generating the loader linker script ..."
   VERBATIM)
 target_link_options(chlibc PRIVATE -T ${CMAKE_CURRENT_BINARY_DIR}/loader.ld)
+
+if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+  message(STATUS "Checking for mandatory RPATH in GCC specs...")
+  execute_process(
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/patch_gcc_specs.sh" "${CMAKE_C_COMPILER}" "${CMAKE_BINARY_DIR}"
+    OUTPUT_VARIABLE PATCHED_SPECS_PATH
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(PATCHED_SPECS_PATH)
+    message(STATUS "Applying RPATH fix for chlibc via specs: ${PATCHED_SPECS_PATH}")
+    target_link_options(chlibc PRIVATE -specs "${PATCHED_SPECS_PATH}")
+  endif()
+endif()
 
 # disable kernel startup checking
 add_custom_command(

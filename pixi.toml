@@ -30,13 +30,41 @@ features = ["gcc-x86_64"]
 no-default-feature = true
 solve-group = "gcc-x86_64"
 
+# cross toolchain for gcc-ppc64le
+[feature.gcc-powerpc64le.system-requirements]
+# build on centos7
+linux = "3.10"
+libc = { family = "glibc", version = "2.17" }
+[feature.gcc-powerpc64le.dependencies]
+cmake = ">=4.2"
+ninja = "*"
+gcc_linux-ppc64le = ">=14" # support C23
+[feature.gcc-powerpc64le.tasks]
+_configure-gcc-powerpc64le = "cmake --preset gcc-powerpc64le -S ."
+_build-gcc-powerpc64le-release = "./cmake-build --preset gcc-powerpc64le-release"
+_build-gcc-powerpc64le-debug = "./cmake-build --preset gcc-powerpc64le-debug"
+build-powerpc64le = [
+  { task = "_build-gcc-powerpc64le-release" },
+  { task = "_build-gcc-powerpc64le-debug" },
+]
+
+[environments.gcc-powerpc64le]
+features = ["gcc-powerpc64le"]
+no-default-feature = true
+solve-group = "gcc-powerpc64le"
+
 [tasks]
 configure = [
   { task = "_configure-clang-x86_64" },
   { task = "_configure-clang-aarch64" },
-  { task = "_configure-gcc-x86_64", environment = "x86-64" },
+  { task = "_configure-gcc-powerpc64le", environment = "gcc-powerpc64le" },
+  { task = "_configure-gcc-x86_64", environment = "gcc-x86-64" },
 ]
-build = [{ task = "build-x86_64" }, { task = "build-aarch64" }]
+build = [
+  { task = "build-x86_64" },
+  { task = "build-aarch64" },
+  { task = "build-powerpc64le" },
+]
 
 _configure-clang-x86_64 = "cmake --preset clang-x86_64 -S ."
 _configure-clang-aarch64 = "cmake --preset clang-aarch64 -S ."

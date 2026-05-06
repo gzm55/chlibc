@@ -82,7 +82,7 @@ void loader() {
       ".global trap_ok_marker, trap_munmap_fail_marker, loader_end;"
       "mov %%rax, %%rbp;"  // save loader base
 
-      "mov %%rsp, %%rdi;"  // param
+      "mov %%rsp, %%rdi;"  // loader_param on stack
       "mov %%r13, %%rsi;"  // total_memsz for PIE elf
       "mov %%r14, %%rdx;"  // loader_reg_flags_t
       "call loader_main;"  // now r13, r14 can be dropped, r8 is already set to fd

@@ -11,8 +11,10 @@ case "$TARGET" in
 esac
 
 case "$TARGET_ARCH" in
-"Advanced Micro Devices X86-64") MAX_GLIBC="2.5" NO_IFUNC=true ;;
-AArch64) MAX_GLIBC="2.17" NO_IFUNC=true ;;
+"Advanced Micro Devices X86-64") MAX_GLIBC="2.5" ;;
+AArch64) MAX_GLIBC="2.17" ;;
+PowerPC64) MAX_GLIBC="2.17" ;;
+RISC-V) MAX_GLIBC="2.27" ;;
 *) echo "[ERROR] non support arch $TARGET_ARCH"
 esac
 
@@ -52,13 +54,11 @@ elif is_ver_gt "$MAX_FOUND_GLIBC" "$MAX_GLIBC"; then
 fi
 
 # Check no IFUNC
-if $NO_IFUNC; then
-  FOUND_IFUNC=false
-  "$READELF_BIN" -sW "$TARGET" 2>/dev/null | grep -qE 'IFUNC|STT_GNU_IFUNC' && FOUND_IFUNC=true
-  "$READELF_BIN" -rW "$TARGET" 2>/dev/null | grep -q 'IRELATIVE' && FOUND_IFUNC=true
-  if $FOUND_IFUNC; then
-    log_error "Found IFUNC functions"
-  fi
+FOUND_IFUNC=false
+"$READELF_BIN" -sW "$TARGET" 2>/dev/null | grep -qE 'IFUNC|STT_GNU_IFUNC' && FOUND_IFUNC=true
+"$READELF_BIN" -rW "$TARGET" 2>/dev/null | grep -q 'IRELATIVE' && FOUND_IFUNC=true
+if $FOUND_IFUNC; then
+  log_error "Found IFUNC functions"
 fi
 
 if [ "$EXIT_STATUS" -ne 0 ]; then

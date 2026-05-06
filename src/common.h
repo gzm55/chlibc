@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// ref: https://sourceforge.net/p/predef/wiki/Architectures/
 #if defined(__x86_64__)
 #  ifdef __ILP32__
 #    error "Requires x86_64 LP64 ABI, not x32 ILP32 ABI."
@@ -20,6 +21,8 @@
 #  else
 #    error "Requires riscv 64bit with C-extension (Compressed Instructions). Compilation aborted."
 #  endif
+#elif defined(__powerpc64__)
+#  define ARCH_PPC64LE
 #else
 #  error "Requires x86_64/aarch64/riscv64 architecture. Compilation aborted."
 #endif
@@ -54,16 +57,24 @@
   }))
 
 #define __ALIGNAS_OF_DEF(p) typeof(*_Generic(__extension__((p) + UINT64_MAX), uint64_t: (uint64_t *)0, default: p))
-#define __ALIGN_Z_EXT(p)                                                                                             \
-  ((uint64_t)(unsigned _BitInt(                                                                                      \
-      _Generic(__extension__((p) + UINT64_MAX), uint64_t: sizeof(p), default: sizeof(__extension__((p) + 0))) * 8))( \
-      p))
+
+// if p is integer, return sizeof(p)
+// if p is pointer or array, return sizeof(&p[0])
+#define __P_SIZE(p) \
+  _Generic(__extension__((p) + UINT64_MAX), uint64_t: sizeof(p), default: sizeof(__extension__((p) + 0)))
+
+// #ifndef ARCH_PPC64LE
+#ifdef BITINT_MAXWIDTH
+#  define __ALIGN_Z_EXT(p) ((uint64_t)(unsigned _BitInt(__P_SIZE(p) * 8))(p))
+#else
+#  define __ALIGN_Z_EXT(p) (((uint64_t)(uintptr_t)(p)) & (UINT64_MAX >> (64 - __P_SIZE(p) * 8)))
+#endif
 
 #define ALIGN_D_IMP(p, a, t) ((t)((p) & ~((a) - 1)))
 #define ALIGN_U_IMP(p, a, t) ((t)(((p) + (a) - 1) & ~((a) - 1)))
 #define ALIGN_D_DIST_IMP(p, a) ((p) & ((a) - 1))
 #define ALIGN_U_DIST_IMP(p, a) (-(p) & ((a) - 1))
-#define ALIGN_U_INVALID_IMP(a) ((uint64_t)(int64_t)(-(signed _BitInt(sizeof(a) * 8))(a)))
+#define ALIGN_U_INVALID_IMP(a) ((uint64_t)-(int64_t)(a))
 
 // align_*(p, [alignas])
 // align_*_dist(p, [alignas])
@@ -111,6 +122,18 @@ typedef unsigned __int128 uint128_t;
 static_assert(alignof(int128_t) == 16);
 static_assert(alignof(uint128_t) == 16);
 #  pragma GCC diagnostic pop
+#endif
+
+#if defined(__clang__) && __has_builtin(__builtin_assume)
+#  define __ASSUME(expr) __builtin_assume(expr)
+#elif defined(__has_c_attribute) && __has_c_attribute(assume)
+#  define __ASSUME(expr) [[assume(expr)]]
+#else
+#  define __ASSUME(cond)         \
+    do {                         \
+      if (!(cond))               \
+        __builtin_unreachable(); \
+    } while (0)
 #endif
 
 ////////// API check Functions ////////////

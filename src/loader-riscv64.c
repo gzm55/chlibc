@@ -83,14 +83,14 @@ void loader() {
       ".global trap_ok_marker, trap_munmap_fail_marker, loader_end;"
       "c.mv s1, a0;"  // save loader base
 
-      "c.mv a0, sp;"          // param
+      "c.mv a0, sp;"          // loader_param on stack
       "c.mv a1, s3;"          // total_memsz for PIE elf
       "c.mv a2, s4;"          // loader_reg_flags_t
       "call loader_main;"     // now s3, s4 can be dropped, a4 is already set to fd
       "bltz a0, quick_exit;"  // fail with -errno in a0
 
-      "ld a2, %c[reg_off](sp);"  // arg2, dst, reuse a0 and a1
-      "c.mv a3, sp;"             // arg1, src
+      "ld a2, %c[reg_off](sp);"  // dst, reuse a0 and a1
+      "c.mv a3, sp;"             // src
       "c.mv sp, a2;"             // allocate space
 
       "call loader_fix_stack;"

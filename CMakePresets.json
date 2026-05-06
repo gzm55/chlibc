@@ -57,6 +57,12 @@
       "inherits": "base"
     },
     {
+      "name": "gcc-powerpc64le",
+      "displayName": "Linux Cross-Compile for ${presetName}",
+      "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
+      "inherits": "base"
+    },
+    {
       "name": "gcc-x86_64",
       "displayName": "Linux Cross-Compile for ${presetName}",
       "description": "Using Ninja Multi-Config with ${presetName} linux toolchain",
@@ -98,6 +104,16 @@
     {
       "name": "clang-riscv64-release",
       "configurePreset": "clang-riscv64",
+      "configuration": "Release"
+    },
+    {
+      "name": "gcc-powerpc64le-debug",
+      "configurePreset": "gcc-powerpc64le",
+      "configuration": "Debug"
+    },
+    {
+      "name": "gcc-powerpc64le-release",
+      "configurePreset": "gcc-powerpc64le",
       "configuration": "Release"
     },
     {

@@ -11,7 +11,7 @@
 #  endif
 #endif
 
-#define SYSCALL_FAIL(r) ((uint64_t)-4096 < (uint64_t)(r))
+#define SYSCALL_FAIL(r) ((uint64_t)-4096 < (uint64_t)(uintptr_t)(r))
 
 LOADER_SECTION(text)
 static inline int _tlc_strncmp(const char *const restrict s1, const char *const restrict s2, const size_t n) {
@@ -61,12 +61,16 @@ static inline void *_tlc_memmove16(void *dest, const void *src, size_t count) {
   auto const d = (uint128_t *)__builtin_assume_aligned(dest, 16);
   auto const s = (const uint128_t *)__builtin_assume_aligned(src, 16);
   auto const n = align_u(count, alignof(uint128_t)) / sizeof(uint128_t);  // extend to full 16 bytes
-                                                                          //
-  // ensure s[n-1] exists and will not be overlapped in moving loop body
-  __builtin_assume(n > 0);
-  __builtin_assume((uintptr_t)s - (uintptr_t)d > 16);
 
-#  pragma unroll 2
+  // ensure s[n-1] exists and will not be overlapped in moving loop body
+  __ASSUME(n > 0);
+  __ASSUME((uintptr_t)s - (uintptr_t)d > 16);
+
+#  if defined(__clang__)
+  _Pragma("unroll 2")
+#  else
+  _Pragma("GCC unroll 2")
+#  endif
   for (size_t i = 0; i < (n & ~UINT64_C(1)); i++)
     d[i] = s[i];
   d[n - 1] = s[n - 1];
@@ -74,111 +78,47 @@ static inline void *_tlc_memmove16(void *dest, const void *src, size_t count) {
   return rst;
 }
 
+#define EVAL8(...) EVAL4(EVAL4(__VA_ARGS__))
+#define EVAL4(...) EVAL2(EVAL2(__VA_ARGS__))
+#define EVAL2(...) __VA_ARGS__
+#define NEXT_EXPAND_ROUND()
+#define LOOP8I(op, ...) __VA_OPT__(EVAL8(LOOP8I_DO(op, 7, 6, 5, 4, 3, 2, 1, 0, __VA_ARGS__)))
+#define LOOP8I_DO(op, _7, _6, _5, _4, _3, _2, _1, idx, v, ...) \
+  op(idx, v) __VA_OPT__(LOOP8I_DO_DELAY_TO NEXT_EXPAND_ROUND()()(op, -1, _7, _6, _5, _4, _3, _2, _1, __VA_ARGS__))
+#define LOOP8I_DO_DELAY_TO() LOOP8I_DO
+#define SYSCALL_BIND(i, exp) register const uint64_t a##i __asm__(_STR(_N_SYS_A_I##i)) = (uintptr_t)(exp);
+#define SYSCALL_READ_REG(i, exp) , "r"(a##i)
+
+#define ASM_SYSCALL(name, ...)                                                  \
+  ret __asm__(_STR(_N_SYS_RET));                                                \
+  register const uint64_t nr __asm__(_STR(_N_SYS_NR)) = SYS_##name;             \
+  LOOP8I(SYSCALL_BIND __VA_OPT__(, ) __VA_ARGS__)                               \
+  __asm__ volatile(_STR(_N_SYS_INST)                                            \
+                   : "=r"(ret)                                                  \
+                   : "r"(nr)LOOP8I(SYSCALL_READ_REG __VA_OPT__(, ) __VA_ARGS__) \
+                   : "memory" _N_SYS_CLOBBERS);                                 \
+  return ret
+
 LOADER_SECTION(text)
 [[gnu::always_inline]]
-static inline uintptr_t _tlc_mmap(void *addr, const size_t length, const int prot, const int flags, const int fd,
-                                  const off_t offset) {
-  uintptr_t ret;
-#ifdef ARCH_X64
-  ret = SYS_mmap;
-  register const uint64_t r10 __asm__("r10") = (long)flags;
-  register const uint64_t r8 __asm__("r8") = (uint64_t)fd;
-  register const uint64_t r9 __asm__("r9") = (uint64_t)offset;
-  __asm__ volatile("syscall"
-                   : "+a"(ret)
-                   : "D"(addr), "S"(length), "d"(prot), "r"(r10), "r"(r8), "r"(r9)
-                   : "rcx", "r11", "memory");
-#elif defined(ARCH_ARM64)
-  register auto x0 __asm__("x0") = addr;
-  register const uint64_t x1 __asm__("x1") = length;
-  register const uint64_t x2 __asm__("x2") = prot;
-  register const uint64_t x3 __asm__("x3") = flags;
-  register const uint64_t x4 __asm__("x4") = fd;
-  register const uint64_t x5 __asm__("x5") = offset;
-  register const uint64_t nr __asm__("x8") = SYS_mmap;
-  __asm__ volatile("svc #0" : "+r"(x0) : "r"(nr), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5) : "memory");
-  ret = (typeof(ret))x0;
-#else  // ARCH_RISCV64
-  register auto x0 __asm__("a0") = addr;
-  register const uint64_t x1 __asm__("a1") = length;
-  register const uint64_t x2 __asm__("a2") = prot;
-  register const uint64_t x3 __asm__("a3") = flags;
-  register const uint64_t x4 __asm__("a4") = fd;
-  register const uint64_t x5 __asm__("a5") = offset;
-  register const uint64_t nr __asm__("a7") = SYS_mmap;
-  __asm__ volatile("ecall" : "+r"(x0) : "r"(nr), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5) : "memory");
-  ret = (typeof(ret))x0;
-#endif
-  return ret;
+static inline uint8_t *_tlc_mmap(void *const addr, const size_t length, const int prot, const int flags, const int fd,
+                                 const off_t offset) {
+  register uint8_t *ASM_SYSCALL(mmap, addr, length, prot, flags, fd, offset);
 }
-
 LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uint64_t _tlc_munmap(void *const addr, const size_t length) {
-  uintptr_t ret;
-#ifdef ARCH_X64
-  ret = SYS_munmap;
-  __asm__ volatile("syscall" : "+a"(ret) : "D"(addr), "S"(length) : "rcx", "r11", "memory");
-#elif defined(ARCH_ARM64)
-  register auto x0 __asm__("x0") = addr;
-  register const uint64_t x1 __asm__("x1") = length;
-  register const uint64_t nr __asm__("x8") = SYS_munmap;
-  __asm__ volatile("svc #0" : "+r"(x0) : "r"(nr), "r"(x1) : "memory");
-  ret = (typeof(ret))x0;
-#else  // ARCH_RISCV64
-  register auto x0 __asm__("a0") = addr;
-  register const uint64_t x1 __asm__("a1") = length;
-  register const uint64_t nr __asm__("a7") = SYS_munmap;
-  __asm__ volatile("ecall" : "+r"(x0) : "r"(nr), "r"(x1) : "memory");
-  ret = (typeof(ret))x0;
-#endif
-  return ret;
+  register uint64_t ASM_SYSCALL(munmap, addr, length);
 }
-
 LOADER_SECTION(text)
 [[gnu::always_inline]]
-static inline int _tlc_open(const char *path, int flags) {
-  uintptr_t ret;
-#ifdef ARCH_X64
-  ret = SYS_open;
-  __asm__ volatile("syscall" : "+a"(ret) : "D"(path), "S"(flags) : "rcx", "r11", "memory");
-#elif defined(ARCH_ARM64)
-  register uintptr_t x0 __asm__("x0") = 0;
-  register const auto x1 __asm__("x1") = path;
-  register const uint64_t x2 __asm__("x2") = flags;
-  register const uint64_t nr __asm__("x8") = SYS_openat;
-  __asm__ volatile("svc #0" : "+r"(x0) : "r"(nr), "r"(x1), "r"(x2) : "memory");
-  ret = x0;
-#else  // ARCH_RISCV64
-  register uintptr_t x0 __asm__("a0") = 0;
-  register const auto x1 __asm__("a1") = path;
-  register const uint64_t x2 __asm__("a2") = flags;
-  register const uint64_t nr __asm__("a7") = SYS_openat;
-  __asm__ volatile("ecall" : "+r"(x0) : "r"(nr), "r"(x1), "r"(x2) : "memory");
-  ret = x0;
-#endif
-  return ret;
+static inline int _tlc_open(const char *const path, const int flags) {
+  register int ASM_SYSCALL(openat, 0, path, flags);  // path must be a absolute path, so dirfd is ignored
 }
-
 LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uint64_t _tlc_close(const int fd) {
-  uintptr_t ret;
-#ifdef ARCH_X64
-  ret = SYS_close;
-  __asm__ volatile("syscall" : "+a"(ret) : "D"(fd) : "rcx", "r11", "memory");
-#elif defined(ARCH_ARM64)
-  register uint64_t x0 __asm__("x0") = fd;
-  register const uint64_t nr __asm__("x8") = SYS_close;
-  __asm__ volatile("svc #0" : "+r"(x0) : "r"(nr) : "memory");
-  ret = x0;
-#else  // ARCH_RISCV64
-  register uint64_t x0 __asm__("a0") = fd;
-  register const uint64_t nr __asm__("a7") = SYS_close;
-  __asm__ volatile("ecall" : "+r"(x0) : "r"(nr) : "memory");
-  ret = x0;
-#endif
-  return ret;
+  register uint64_t ASM_SYSCALL(close, fd);
 }
 
 constexpr auto LD_DIR_KEY_LEN = 16;
@@ -211,7 +151,13 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
   // Move [rsp, rsp + sz) to [new_sp, new_sp + sz), assume new_sp < sp
   // On the return of execve, the DF must be 0.
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
-
+#ifdef ARCH_PPC64LE
+  // use local LD_DIR_KEY on stack to avoid depending on TOC
+  const union {
+    char cstr[LD_DIR_KEY_LEN + 1];
+    uint128_t d128;
+  } LD_DIR_KEY = {.d128 = ((uint128_t)0x3D485441505F5952 << 64) | 0x415242494C5F444C};
+#endif
   if (p_ld_dir) {
     // fix LD_LIBRARY_PATH
     auto prev = LD_DIR_KEY.cstr + LD_DIR_KEY_LEN;  // empty string
@@ -272,8 +218,8 @@ typedef struct {
 static_assert(sizeof(loader_sys_conf_t) == sizeof(uint64_t));
 
 LOADER_SECTION(text)
-static inline void *loader_mmap(void *const base, const mmap_param_t *const m, const size_t placeholder, const int fd,
-                                const loader_sys_conf_t g_sc) {
+static inline uint8_t *loader_mmap(uint8_t *const base, const mmap_param_t *const m, const size_t placeholder,
+                                   const int fd, const loader_sys_conf_t g_sc) {
   auto const nofd = m->offset + 1 == 0;
   const int prot = m->prot
 #ifdef ARCH_ARM64
@@ -286,7 +232,7 @@ static inline void *loader_mmap(void *const base, const mmap_param_t *const m, c
   auto const ofs = nofd ? 0 : m->offset;
   auto const length = placeholder ? placeholder : segsz;
 
-  auto rst = (uint8_t *)_tlc_mmap((uint8_t *)base + m->vaddr, length, prot, flags, _fd, ofs);
+  auto rst = _tlc_mmap(base + m->vaddr, length, prot, flags, _fd, ofs);
   if (SYSCALL_FAIL(rst))
     return rst;  // mmap() fail
 
@@ -350,7 +296,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
       goto FAIL;
     }
 
-    base = (uint8_t *)rst - m->vaddr;
+    base = rst - m->vaddr;
 
     ++m;
   }
@@ -358,7 +304,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   auxv[rflags.at_base_idx].a_un.a_val = (uintptr_t)base;  // save new base
 
   for (; m < mmap_params_end; ++m) {
-    auto const rst = (uintptr_t)loader_mmap(base, m, 0, fd, sys_conf);
+    auto const rst = loader_mmap(base, m, 0, fd, sys_conf);
     if (SYSCALL_FAIL(rst)) {
       info.stacksz = (typeof(info.stacksz))rst;
       goto FAIL;

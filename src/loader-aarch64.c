@@ -77,7 +77,7 @@ void loader() {
       ".global trap_ok_marker, trap_munmap_fail_marker, loader_end;"
       "mov x20, x0;"  // save loader base
 
-      "mov x0, sp;"                // param
+      "mov x0, sp;"                // loader_param on stack
       "mov x1, x22;"               // total_memsz for PIE elf
       "mov x2, x23;"               // loader_reg_flags_t
       "bl loader_main;"            // now x22, x23 can be dropped, x4 is already set to fd

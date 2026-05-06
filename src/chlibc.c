@@ -4,6 +4,7 @@
 #  endif
 // Runtime kernel requirement:
 //   X64:     Linux >= 2.6.18
+//   PPC64LE: Linux >= 3.10
 //   ARM64:   Linux >= 3.19
 //   RISCV64: Linux >= 5.4
 #else
@@ -356,8 +357,10 @@ static void tracer_sigaction_handler(const int sig, siginfo_t *const info, void 
         (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.gregs[REG_RIP]);
 #elif defined(ARCH_ARM64)
         (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.pc);
-#else  // ARCH_RISCV64
+#elif defined(ARCH_RISCV64)
         (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.__gregs[REG_PC]);
+#else  // ARCH_PPC64LE
+        (uintptr_t)(((const ucontext_t *)ctx)->uc_mcontext.gp_regs[PT_NIP]);
 #endif
     atomic_store_explicit(&sig_crash_ip, instruction_pointer, memory_order_relaxed);
     siglongjmp(sig_jump_env, sig);
@@ -811,11 +814,16 @@ static bool alloc_g_buffer() {
 #  define INTERP_NAME "/ld-linux-aarch64.so.1"
 #  define CONDA_ARCH_TRIPLE "aarch64-conda-linux-gnu"
 #  define ELF_ARCH EM_AARCH64
-#else  // riscv64 with lp64d ABI
+#elif defined(ARCH_RISCV64)  // riscv64 with lp64d ABI
 #  define SYS_INTERP_PATH "/lib/ld-linux-riscv64-lp64d.so.1"
 #  define CONDA_ARCH_TRIPLE "riscv64-conda-linux-gnu"
 #  define INTERP_NAME "/ld-linux-riscv64-lp64d.so.1"
 #  define ELF_ARCH EM_RISCV
+#else  // ARCH_PPC64LE
+#  define SYS_INTERP_PATH "/lib64/ld64.so.2"
+#  define CONDA_ARCH_TRIPLE "powerpc64le-conda-linux-gnu"
+#  define INTERP_NAME "/ld64.so.2"
+#  define ELF_ARCH EM_PPC64
 #endif
 #define SYS_INTERP_PATH_WORD_NR ((sizeof(SYS_INTERP_PATH) + sizeof(uint64_t) - 1) / sizeof(uint64_t))
 #define CONDA_INTERP_PATH "/" CONDA_ARCH_TRIPLE "/sysroot" SYS_INTERP_PATH
@@ -1641,10 +1649,7 @@ static void init_loader_params() {
 
   // init const part
   {
-    const loader_param_t header = {
-        .regs = {0},
-        .relo_offsets = {0},
-    };
+    const loader_param_t header = {0};
     memcpy(g_loader_param, &header, sizeof(header));
   }
 
@@ -1796,7 +1801,7 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   // stack grows downwards
   (*g_loader_loader_param)[1] = PROT_READ | PROT_EXEC | g_sc.prot_bti;  // to x2
   (*g_loader_loader_param)[0] = SYS_mmap;                               // to x8
-#else  // defined(ARCH_RISCV64)
+#elif defined(ARCH_RISCV64)
   regs._M_SYS_NR = SYS_openat;       // no open() syscall
   regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
   regs._M_SYS_ARG2 = r_chlibc_path;  // absolute path
@@ -1807,6 +1812,16 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   regs._M_S0 = SYS_exit;
   regs.s10 = PROT_READ | PROT_EXEC;
   regs.s11 = SYS_mmap;
+#else  // defined(ARCH_PPC64LE)
+  regs._M_SYS_NR = SYS_openat;
+  regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
+  regs._M_SYS_ARG2 = r_chlibc_path;  // absolute path
+  regs._M_SYS_ARG3 = O_RDONLY;
+  regs._M_SYS_ARG4 = MAP_PRIVATE;
+  regs._M_SYS_ARG5 = loader_info.filesz;
+  regs._M_SYS_ARG6 = 0;
+  regs.gpr[30] = PROT_READ | PROT_EXEC;
+  regs.gpr[31] = SYS_mmap;
 #endif
 
   // Upload to stack
@@ -2002,6 +2017,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
           break;
         case HEXEC_FAIL_DOWNLOAD:
           DEBUG(pid, status >> 16, exitsig, "handle_exec FAIL and cannot fix env");
+          [[fallthrough]];
         default:  // HEXEC_FATAL
           deliver_sig = SIGKILL;
           DEBUG(pid, status >> 16, exitsig, "handle_exec FATAL: cannot jump to loader_loader()");

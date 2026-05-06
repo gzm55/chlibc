@@ -51,8 +51,8 @@ for file in "$@"; do
 
   # no outer relocations
   BAD_RELOCS=$("$READELF_BIN" -rW "$file" \
-  | grep "R_X86_64_" \
-  | grep -vE "PC32|PLT32" || :)
+  | grep -E "R_X86_64_64|R_X86_64_32|R_AARCH64_ABS|R_AARCH64_ADR_GOT|R_RISCV_64|R_RISCV_HI20|R_RISCV_GOT|R_PPC64_TOC16_" \
+  | grep -vE "PC32|PLT32|PCREL" || :)
   if [ -n "$BAD_RELOCS" ]; then
     log_error "Non-relative relocations detected:"
     log_error "    $BAD_RELOCS"

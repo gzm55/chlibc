@@ -4,6 +4,7 @@
 #define __CHLIBC_LOADER_H__
 
 #include <elf.h>
+#include <stddef.h>
 #include <sys/syscall.h>
 #include <sys/user.h>
 
@@ -13,8 +14,12 @@
 
 #if defined(ARCH_X64)
 typedef struct user_regs_struct common_regs_t;
+#  define TRAP_OP_NEXT 0
+#  define LOADER_LOADER_SP (0 * 8)
 #  define _M_PC rip
 #  define _M_SP rsp
+
+#  define _M_SYS_RET rax
 #  define _M_SYS_NR rax
 #  define _M_SYS_ARG1 rdi
 #  define _M_SYS_ARG2 rsi
@@ -22,19 +27,31 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_SYS_ARG4 r10
 #  define _M_SYS_ARG5 r8
 #  define _M_SYS_ARG6 r9
-#  define _M_SYS_RET rax
 #  define _M_S0 rbx
 #  define _M_S1 rbp
 #  define _M_S2 r12
 #  define _M_S3 r13
 #  define _M_S4 r14
-#  define TRAP_OP_NEXT 0
-#  define LOADER_LOADER_SP (0 * 8)
+
+#  define _N_SYS_INST syscall
+#  define _N_SYS_RET rax
+#  define _N_SYS_NR rax
+#  define _N_SYS_A_I0 rdi
+#  define _N_SYS_A_I1 rsi
+#  define _N_SYS_A_I2 rdx
+#  define _N_SYS_A_I3 r10
+#  define _N_SYS_A_I4 r8
+#  define _N_SYS_A_I5 r9
+#  define _N_SYS_CLOBBERS , "cc", "rcx", "r11"
 
 #elif defined(ARCH_ARM64)
 typedef struct user_pt_regs common_regs_t;
+#  define TRAP_OP_NEXT 4
+#  define LOADER_LOADER_SP (2 * 8)
 #  define _M_PC pc
 #  define _M_SP sp
+
+#  define _M_SYS_RET regs[0]
 #  define _M_SYS_NR regs[8]
 #  define _M_SYS_ARG1 regs[0]
 #  define _M_SYS_ARG2 regs[1]
@@ -42,19 +59,31 @@ typedef struct user_pt_regs common_regs_t;
 #  define _M_SYS_ARG4 regs[3]
 #  define _M_SYS_ARG5 regs[4]
 #  define _M_SYS_ARG6 regs[5]
-#  define _M_SYS_RET regs[0]
 #  define _M_S0 regs[19]
 #  define _M_S1 regs[20]
 #  define _M_S2 regs[21]
 #  define _M_S3 regs[22]
 #  define _M_S4 regs[23]
-#  define TRAP_OP_NEXT 4
-#  define LOADER_LOADER_SP (2 * 8)
 
-#else  // ARCH_RISCV64
+#  define _N_SYS_INST svc #0
+#  define _N_SYS_RET x0
+#  define _N_SYS_NR x8
+#  define _N_SYS_A_I0 x0
+#  define _N_SYS_A_I1 x1
+#  define _N_SYS_A_I2 x2
+#  define _N_SYS_A_I3 x3
+#  define _N_SYS_A_I4 x4
+#  define _N_SYS_A_I5 x5
+#  define _N_SYS_CLOBBERS
+
+#elif defined(ARCH_RISCV64)
 typedef struct user_regs_struct common_regs_t;
+#  define TRAP_OP_NEXT 2  // compressed instruction
+#  define LOADER_LOADER_SP (0 * 8)
 #  define _M_PC pc
 #  define _M_SP sp
+
+#  define _M_SYS_RET a0
 #  define _M_SYS_NR a7
 #  define _M_SYS_ARG1 a0
 #  define _M_SYS_ARG2 a1
@@ -62,14 +91,54 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_SYS_ARG4 a3
 #  define _M_SYS_ARG5 a4
 #  define _M_SYS_ARG6 a5
-#  define _M_SYS_RET a0
 #  define _M_S0 s0
 #  define _M_S1 s1
 #  define _M_S2 s2
 #  define _M_S3 s3
 #  define _M_S4 s4
-#  define TRAP_OP_NEXT 2  // compressed instruction
+
+#  define _N_SYS_INST ecall
+#  define _N_SYS_RET a0
+#  define _N_SYS_NR a7
+#  define _N_SYS_A_I0 a0
+#  define _N_SYS_A_I1 a1
+#  define _N_SYS_A_I2 a2
+#  define _N_SYS_A_I3 a3
+#  define _N_SYS_A_I4 a4
+#  define _N_SYS_A_I5 a5
+#  define _N_SYS_CLOBBERS
+
+#elif defined(ARCH_PPC64LE)
+typedef struct pt_regs common_regs_t;
+#  define TRAP_OP_NEXT 4
 #  define LOADER_LOADER_SP (0 * 8)
+#  define _M_PC nip
+#  define _M_SP gpr[1]
+
+#  define _M_SYS_RET gpr[3]
+#  define _M_SYS_NR gpr[0]
+#  define _M_SYS_ARG1 gpr[3]
+#  define _M_SYS_ARG2 gpr[4]
+#  define _M_SYS_ARG3 gpr[5]
+#  define _M_SYS_ARG4 gpr[6]
+#  define _M_SYS_ARG5 gpr[7]
+#  define _M_SYS_ARG6 gpr[8]
+#  define _M_S0 gpr[14]
+#  define _M_S1 gpr[15]
+#  define _M_S2 gpr[16]
+#  define _M_S3 gpr[17]
+#  define _M_S4 gpr[18]
+
+#  define _N_SYS_INST sc
+#  define _N_SYS_RET r3
+#  define _N_SYS_NR r0
+#  define _N_SYS_A_I0 r3
+#  define _N_SYS_A_I1 r4
+#  define _N_SYS_A_I2 r5
+#  define _N_SYS_A_I3 r6
+#  define _N_SYS_A_I4 r7
+#  define _N_SYS_A_I5 r8
+#  define _N_SYS_CLOBBERS , "r9", "r10", "r11", "r12", "cr0", "ctr", "lr"
 
 #endif
 
