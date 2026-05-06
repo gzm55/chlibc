@@ -13,6 +13,6 @@ grep -qE "$PATTERN" "$SPECS_PATH" || exit 0
 mkdir -p "$BUILD_DIR"
 OUT_FILE="$BUILD_DIR/norpath.specs"
 
-sed -E "s|${PATTERN}||g" "$SPECS_PATH" > "$OUT_FILE"
+sed "s|${PATTERN}||g" "$SPECS_PATH" > "$OUT_FILE"
 
 printf "%s\n" "$OUT_FILE"
