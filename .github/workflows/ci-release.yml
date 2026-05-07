@@ -62,8 +62,10 @@ jobs:
 
             echo "Arch: $ARCH | Bin: $BIN_HASH | Pkg: $PKG_HASH"
             if [ "$BIN_HASH" != "$PKG_HASH" ]; then
-              echo "Error: Checksum changed in $ARCH conda packages!"
+              echo "Error: Checksum changed in $ARCH conda packages!" >&2
               exit 1
+            else
+              echo OK
             fi
           done
 
@@ -81,8 +83,10 @@ jobs:
 
             echo "Arch: $ARCH | Expected: ${EXPECTED:-N/A} | Actual: $ACTUAL"
             if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
-              echo "Error: Tag checksum mismatch for $ARCH!"
+              echo "Error: Tag checksum mismatch for $ARCH!" >&2
               exit 1
+            else
+              echo OK
             fi
           done
           echo "Checksums verified."
