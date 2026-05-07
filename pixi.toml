@@ -23,7 +23,7 @@ ninja = "*"
 gcc_linux-64 = ">=14" # support C23
 [feature.gcc-x86_64.tasks]
 _configure-gcc-x86_64 = "cmake --preset gcc-x86_64 -S ."
-_build-gcc-x86_64-release = "./cmake-build --preset gcc-x86_64-release"
+_build-gcc-x86_64-release = "unset LD_RUN_PATH && ./cmake-build --preset gcc-x86_64-release"
 
 [environments.gcc-x86-64]
 features = ["gcc-x86_64"]
@@ -41,7 +41,7 @@ ninja = "*"
 gcc_linux-ppc64le = ">=14" # support C23
 [feature.gcc-powerpc64le.tasks]
 _configure-gcc-powerpc64le = "cmake --preset gcc-powerpc64le -S ."
-_build-gcc-powerpc64le-release = "./cmake-build --preset gcc-powerpc64le-release"
+_build-gcc-powerpc64le-release = "unset LD_RUN_PATH && ./cmake-build --preset gcc-powerpc64le-release"
 _build-gcc-powerpc64le-debug = "./cmake-build --preset gcc-powerpc64le-debug"
 build-powerpc64le = [
   { task = "_build-gcc-powerpc64le-release" },
@@ -84,11 +84,11 @@ build-riscv64 = [
   { task = "_build-clang-riscv64-debug" },
 ]
 
-_build-clang-x86_64-release = "./cmake-build --preset clang-x86_64-release"
+_build-clang-x86_64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-x86_64-release"
 _build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
-_build-clang-aarch64-release = "./cmake-build --preset clang-aarch64-release"
+_build-clang-aarch64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-aarch64-release"
 _build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
-_build-clang-riscv64-release = "./cmake-build --preset clang-riscv64-release"
+_build-clang-riscv64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-riscv64-release"
 _build-clang-riscv64-debug = "./cmake-build --preset clang-riscv64-debug"
 
 conda-build = [
@@ -97,6 +97,7 @@ conda-build = [
 ]
 conda-build-x86_64 = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-64", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
 conda-build-aarch64 = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-aarch64", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
+conda-build-powerpc64le = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-ppc64le", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
 
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"

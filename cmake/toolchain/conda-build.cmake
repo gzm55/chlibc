@@ -27,11 +27,14 @@ set(CMAKE_SYSTEM_PROCESSOR
     CACHE STRING "Target CPU Name")
 set(CMAKE_C_COMPILER_TARGET "$ENV{HOST}")
 set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+  set(CMAKE_SYSTEM_PROCESSOR "powerpc64le")
+endif()
 
 if($ENV{CC} MATCHES "clang")
   set(CMAKE_C_PP_FLAGS "--target=${CMAKE_C_COMPILER_TARGET}")
   set(_toolchain_tool_prefix llvm-)
-elseif($ENV{CC} MATCHES "gcc")
+elseif($ENV{CC} MATCHES "gcc" OR $ENV{CC} MATCHES "-gnu-cc")
   set(CMAKE_C_PP_FLAGS "")
   set(_toolchain_tool_prefix "${CMAKE_C_COMPILER_TARGET}-")
 else()
@@ -52,6 +55,16 @@ string(STRIP "${CMAKE_C_FLAGS_INIT}" CMAKE_C_FLAGS_INIT)
 set(CMAKE_EXE_LINKER_FLAGS_INIT "$CACHE{CMAKE_EXE_LINKER_FLAGS_INIT} -D__CMAKE_EXE_LINKER_FLAGS_INIT") # begin marker
 string(STRIP "${CMAKE_EXE_LINKER_FLAGS_INIT}" CMAKE_EXE_LINKER_FLAGS_INIT)
 
+# remove -Wl,-path,... from LDFLAGS
+if(DEFINED ENV{LDFLAGS} AND "$ENV{LDFLAGS}" MATCHES "Wl,-rpath,")
+  string(REGEX REPLACE "\\s*-Wl,-rpath,[^ ]+" " " _filtered_ldflags "$ENV{LDFLAGS} ")
+  string(STRIP "${_filtered_ldflags}" _filtered_ldflags)
+  string(REGEX REPLACE " +" " " _filtered_ldflags "${_filtered_ldflags}")
+  set(ENV{LDFLAGS} "${_filtered_ldflags}")
+  unset(_filtered_ldflags)
+endif()
+
+string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -v")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:--sort-common")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,relro")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,now")

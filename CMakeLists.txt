@@ -90,6 +90,10 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
   add_link_options(--no-default-config)
 endif()
 
+if(DEFINED ENV{LD_RUN_PATH})
+  message(FATAL_ERROR "LD_RUN_PATH environment variable is set to $ENV{LD_RUN_PATH}. Cannot remove RPATH.")
+endif()
+
 # enable strip for release
 add_link_options($<$<CONFIG:Release>:-s>)
 

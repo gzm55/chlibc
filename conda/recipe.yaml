@@ -22,13 +22,14 @@ source:
       sha256: ${{ release_hash }}
 
 build:
-  skip: ${{ target_platform not in ["linux-64", "linux-aarch64"] }}
+  skip: ${{ target_platform not in ["linux-64", "linux-aarch64", "linux-ppc64le"] }}
   number: 0
   dynamic_linking:
     binary_relocation: false
     rpath_allowlist: []
   script:
     content: |
+      {% if target_platform in ["linux-64", "linux-aarch64"] %}
       unset CFLAGS
       unset AR
       unset AS
@@ -38,9 +39,10 @@ build:
       unset OBJCOPY
       unset READELF
       unset STRIP
-      unset CMAKE_COLOR_DIAGNOSTICS
       export CC=clang
+      {% endif %}
 
+      unset LD_RUN_PATH
       env
 
       cmake --fresh --preset conda-build ${CMAKE_ARGS} -U CMAKE_LINKER -U CMAKE_STRIP
@@ -53,13 +55,19 @@ requirements:
   build:
     - ${{ compiler('c') }}
     - ${{ stdlib("c") }}
-    - clang
-    - compiler-rt_${{ target_platform }}
-    - lld
-    - llvm-tools
     - cmake >=4.2
     - ninja
-    - clang-tools
+
+    - if: target_platform in ["linux-64", "linux-aarch64"]
+      then: clang
+    - if: target_platform in ["linux-64", "linux-aarch64"]
+      then: compiler-rt_${{ target_platform }}
+    - if: target_platform in ["linux-64", "linux-aarch64"]
+      then: lld
+    - if: target_platform in ["linux-64", "linux-aarch64"]
+      then: llvm-tools
+    - if: target_platform in ["linux-64", "linux-aarch64"]
+      then: clang-tools
   host:
   run:
     - __glibc
