@@ -34,11 +34,17 @@ git commit -m "chore: release v$RELEASE_VERSION"
 rm -rf build
 ./pixiw run build
 
-SHA256_X64=$(sha256sum build/clang-x86_64/bin/chlibc | awk '{print $1}')
-SHA256_AARCH64=$(sha256sum build/clang-aarch64/bin/chlibc | awk '{print $1}')
+ARCH_MAP="x86_64:build/clang-x86_64 aarch64:build/clang-aarch64 ppc64le:build/gcc-powerpc64le"
+CHECKSUMS_TEXT=""
 
-TAG_MSG=$(printf "version %s\n\nSHA256 Checksums:\n%s  chlibc-x86_64\n%s  chlibc-aarch64" \
-    "$RELEASE_VERSION" "$SHA256_X64" "$SHA256_AARCH64")
+for cfg in $ARCH_MAP; do
+    arch=${cfg%%:*}
+    path=${cfg#*:}
+    hash=$(sha256sum "$path/bin/chlibc" | awk '{print $1}')
+    CHECKSUMS_TEXT="${CHECKSUMS_TEXT}${hash}  chlibc-${arch}\n"
+done
+
+TAG_MSG=$(printf "version %s\n\nSHA256 Checksums:\n%b" "$RELEASE_VERSION" "$CHECKSUMS_TEXT")
 
 git tag -a "v$RELEASE_VERSION" -m "$TAG_MSG"
 
