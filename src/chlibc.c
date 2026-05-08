@@ -1955,6 +1955,10 @@ static void restore_env_path(const pid_t pid, const exec_arg_t exec_arg[static 1
 
 // process a waitpid() stop for pid > 0.
 // exitsig>0 means in the existing stage with the specified signal
+#if defined(ARCH_PPC64LE) && defined(__OPTIMIZE__)
+// powerpc64le with O2+ produces some different instruction orders on osx-arm64 and linux-64
+[[gnu::optimize("O1")]]
+#endif
 static void process(const pid_t pid, const int status, const int exitsig) {
   if (WIFEXITED(status) || WIFSIGNALED(status)) {
     DEBUG(pid, 0, 0, "process WIFEXITED|WIFSIGNALED");
