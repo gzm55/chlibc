@@ -202,6 +202,10 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     VERBATIM)
 endif()
 
+# This simple init target is used for test cases in qemu systems
+add_executable(init src/init.c)
+target_compile_definitions(init PRIVATE _GNU_SOURCE) # enable GNU features
+
 # common options
 get_property(
   all_targets

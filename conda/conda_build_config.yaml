@@ -1,3 +1,11 @@
 ---
+c_compiler:
+  - clang  # [x86_64 or aarch64]
+  - gcc  # [ppc64le]
+c_compiler_version:
+  - ">=18"  # [x86_64 or aarch64]
+  - ">=14"  # [ppc64le]
+
+# c_stdlib is auto set on CI of conda-feedback, but need set manually when build locally
 c_stdlib:
   - sysroot

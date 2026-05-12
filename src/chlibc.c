@@ -731,14 +731,24 @@ static bool init_sys_config() {
 
 #ifdef ARCH_X64
   {
-    auto const null_fd = _OK_CALL(open("/dev/null", O_RDONLY | O_CLOEXEC), _ >= 0, return false);
-    auto const null_fd_flags = _OK_CALL(fcntl(null_fd, F_GETFD), _ != -1, return false);
-    auto const null_dupfd = fcntl(null_fd, F_DUPFD_CLOEXEC);
+    auto const test_fd = open("/proc/self", O_RDONLY | O_CLOEXEC);
+    if (0 <= test_fd) {
+      auto const fd_flags = _OK_CALL(fcntl(test_fd, F_GETFD), _ != -1, close(test_fd); return false);
+      g_sc.o_cloexec = (fd_flags & FD_CLOEXEC) != 0 ? O_CLOEXEC : 0;
 
-    g_sc.o_cloexec = (null_fd_flags & FD_CLOEXEC) != 0 ? O_CLOEXEC : 0;
-    g_sc.f_dupfd_cloexec = 0 <= null_dupfd ? F_DUPFD_CLOEXEC : F_DUPFD;
-    close(null_dupfd);
-    close(null_fd);
+      auto const dup_fd = fcntl(test_fd, F_DUPFD_CLOEXEC, 0);
+
+      if (0 <= dup_fd) {
+        g_sc.f_dupfd_cloexec = F_DUPFD_CLOEXEC;
+        close(dup_fd);
+      } else
+        g_sc.f_dupfd_cloexec = F_DUPFD;
+
+      close(test_fd);
+    } else {
+      g_sc.o_cloexec = 0;
+      g_sc.f_dupfd_cloexec = F_DUPFD;
+    }
   }
 #else
   g_sc.o_cloexec = O_CLOEXEC;
@@ -913,8 +923,10 @@ static bool init_chlibc_root() {
 
   if (rst) {
     chlibc_root_len = strlen(chlibc_root);
-    chlibc_root[chlibc_root_len++] = '/';
-    chlibc_root[chlibc_root_len] = '\0';
+    if ('/' != chlibc_root[chlibc_root_len]) {
+      chlibc_root[chlibc_root_len++] = '/';
+      chlibc_root[chlibc_root_len] = '\0';
+    }
   } else
     ERR("no valid chlibc prefix found");
 

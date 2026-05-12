@@ -1,6 +1,8 @@
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <elf.h>
+#include <fcntl.h>
+#include <gnu/libc-version.h>
 #include <link.h>
 #include <linux/prctl.h> /* Definition of PR_* constants */
 #include <stddef.h>
@@ -9,6 +11,7 @@
 #include <string.h>
 #include <sys/auxv.h>
 #include <sys/prctl.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 static const char *get_owner(void *addr, Dl_info *info) {
@@ -173,31 +176,12 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < argc; ++i)
     printf("%d:[%s]\n", i, argv[i]);
 
-#if 0
-  printf("==== DL_ARGV ====\n");
-  printf("&_dl_argv=%p  _dl_argv=%p\n", (void *)&_dl_argv, (void *)_dl_argv);
-  for (i = 0; i < argc && _dl_argv; ++i)
-    printf("%d:[%s]\n", i, _dl_argv[i]);
-#endif
-
   printf("==== Some Environments ====\n");
   char **env = environ;
   while (*env) {
     if (strncmp(*env, "LD_", 3) == 0 || strncmp(*env, "CONDA_", 6) == 0 || strncmp(*env, "CHLIBC_", 7) == 0)
       printf("%s\n", *env);
     env++;
-  }
-
-  printf("==== LINK MAP ====\n");
-  extern struct r_debug _r_debug;
-  struct link_map *m = _r_debug.r_map;
-
-  //((struct link_map_ext *)m)->l_type = 0; // can restore dli_fname
-
-  while (m) {
-    printf("base=%p type=%d l_entry=%p name=%s\n", (void *)m->l_addr, ((struct link_map_ext *)m)->l_type,
-           (void *)((struct link_map_ext *)m)->l_entry, m->l_name);
-    m = m->l_next;
   }
 
   printf("==== AUXV ====\n");
@@ -214,8 +198,57 @@ int main(int argc, char *argv[]) {
   printf("AT_SYSINFO_EHDR(%d)\t= %p  owner = %s\n", AT_SYSINFO_EHDR, (void *)getauxval(AT_SYSINFO_EHDR),
          get_owner((void *)getauxval(AT_SYSINFO_EHDR), &info));
 
-  printf("==== MAP ====\n");
-  char p[64];
-  snprintf(p, 64, "cat /proc/%d/maps", getpid());
-  system(p);
+  struct utsname os_info;
+
+  if (uname(&os_info) != 0) {
+    perror("uname");
+    return EXIT_FAILURE;
+  }
+
+  printf("========== Kernel Information ==========\n");
+  printf("OS Name        : %s\n", os_info.sysname);
+  printf("Kernel Release : %s\n", os_info.release);
+  printf("Kernel Version : %s\n", os_info.version);
+  printf("Machine Arch   : %s\n", os_info.machine);
+
+  printf("========== Libc Information ==========\n");
+  char glibc_confstr[128];
+  size_t len = confstr(_CS_GNU_LIBC_VERSION, glibc_confstr, sizeof(glibc_confstr));
+  if (len > 0)
+    printf("Libc Version : %s\n", glibc_confstr);
+  else
+    printf("Libc Version : Unavailable\n");
+
+  printf("==== LINK MAP ====\n");
+  extern struct r_debug _r_debug;
+  struct link_map *m = _r_debug.r_map;
+
+  //((struct link_map_ext *)m)->l_type = 0; // can restore dli_fname
+
+  while (m) {
+    printf("base=%p type=%d l_entry=%p name=%s\n", (void *)m->l_addr, ((struct link_map_ext *)m)->l_type,
+           (void *)((struct link_map_ext *)m)->l_entry, m->l_name);
+    m = m->l_next;
+  }
+
+  printf("==== PROC MAP ====\n");
+  {
+    auto const fd = open("/proc/self/maps", O_RDONLY);
+    if (-1 < fd) {
+      char buffer[4096];
+      ssize_t bytes_read;
+      while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+        if (write(STDOUT_FILENO, buffer, bytes_read) != bytes_read) {
+          perror("Write to stdout failed");
+          break;
+        }
+      }
+      close(fd);
+      if (bytes_read == -1)
+        perror("Read from /proc/self/maps failed");
+    } else
+      perror("Open /proc/self/maps failed");
+  }
+
+  return 0;
 }

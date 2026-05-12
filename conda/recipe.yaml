@@ -31,15 +31,7 @@ build:
     content: |
       {% if target_platform in ["linux-64", "linux-aarch64"] %}
       unset CFLAGS
-      unset AR
-      unset AS
-      unset LD
       unset LDFLAGS
-      unset LDFLAGS_LD
-      unset OBJCOPY
-      unset READELF
-      unset STRIP
-      export CC=clang
       {% endif %}
 
       unset LD_RUN_PATH
@@ -49,17 +41,14 @@ build:
       cmake --build --preset conda-build --parallel ${CPU_COUNT}
       cmake --install build/conda-build
 
-      sha256sum "$PREFIX/bin/chlibc"
-
 requirements:
   build:
     - ${{ compiler('c') }}
     - ${{ stdlib("c") }}
+
     - cmake >=4.2
     - ninja
 
-    - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: clang
     - if: target_platform in ["linux-64", "linux-aarch64"]
       then: compiler-rt_${{ target_platform }}
     - if: target_platform in ["linux-64", "linux-aarch64"]
@@ -76,9 +65,6 @@ requirements:
     from_package:
       - ${{ compiler('c') }}
       - ${{ stdlib('c') }}
-    by_name:
-      - libgcc
-      - __glibc
 
 tests:
   - script:
