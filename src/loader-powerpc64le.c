@@ -1,9 +1,11 @@
+#include <sys/mman.h>
 #include "loader.h"
 
 // syscall:   r3 + cr0.so <- r0(r3, r4, r5, r6, r7, r8)
 // function:  r3          <- function(r3, r4, r5, r6, r7, r8, r9, r10)
 //           (r3, r4)     <- function(r3, r4, r5, r6, r7, r8, r9, r10)
 // callee-saved: r1, r2, r14-r31
+// Note: after syscall, r4-r8 are volatile
 
 // Prepares registers and load segments for loader().
 // On EVENT_EXEC, the tracer pokes this function into tracees' memory directly, and let tracees run from
@@ -15,12 +17,8 @@
 //   r3: 0 (set by kernel as execve result)
 //   r4: chlibc_path
 //   r5: O_RDONLY(0)
-//   r6: priv
-//   r7: filesz
-//   r8: 0
 //   r15: loader_offset
-//   r30: R-X
-//   r31: mmap
+//   r16: filesz
 __asm__(
     ".section \".loader.text\";"
     ".align 2;"
@@ -33,18 +31,22 @@ __asm__(
     "li %%r3, %[exit];"
 
     "loader_loader_entry:"
-    // entry: [r0=openat r3=0 r4=chlibc_path r5=O_RDONLY(0)] r6=priv r7=filesz r8=0 r15=loader_offset r30=R-X r31=mmap
+    // entry: [r0=openat r3=0 r4=chlibc_path r5=O_RDONLY(0)] r15=loader_offset r16=filesz
     // exit: [r0=exit r3=exit]
     "sc;"
 
-    // r0=openat r3=fd? r4=chlibc_path r5=O_RDONLY(0) r6=priv r7=filesz r8=0 r15=loader_offset r30=R-X r31=mmap
-    "mr %%r0, %%r31;"
-    // r0=mmap r3=fd? r4=chlibc_path r5=O_RDONLY(0) r6=priv r7=filesz r8=0 r15=loader_offset r30=R-X
-    "mr %%r5, %%r30;"
-    // r0=mmap r3=fd? r4=chlibc_path r5=R-X r6=priv r7=filesz r8=0 r15=loader_offset
-    "mr %%r4, %%r7;"
-    // r0=mmap r3=fd r4=filesz r5=R-X r6=priv r7=filesz r8=0 r15=loader_offset
+    // r0=openat r3=fd? r4=chlibc_path r5=O_RDONLY(0) r15=loader_offset r16=filesz
+    "li %%r0, %[mmap];"
+    // r0=mmap r3=fd? r4=chlibc_path r5=O_RDONLY(0) r15=loader_offset r16=filesz
+    "mr %%r4, %%r16;"
+    // r0=mmap r3=fd? r4=filesz r5=O_RDONLY(0) r15=loader_offset
+    "li %%r5, %[prot];"
+    // r0=mmap r3=fd? r4=filesz r5=R-X r15=loader_offset
+    "li %%r6, %[flag];"
+    // r0=mmap r3=fd? r4=filesz r5=R-X r6=priv r15=loader_offset
     "mr %%r7, %%r3;"
+    // r0=mmap r3=fd? r4=filesz r5=R-X r6=priv r7=fd? r15=loader_offset
+    "li %%r8, 0;"
     // [r0=mmap r3=fd?(hint) r4=filesz r5=R-X r6=priv r7=fd? r8=0] r15=loader_offset
     "sc;"
 
@@ -60,8 +62,7 @@ __asm__(
 
     "loader_loader_end:"
     :
-    : [exit] "i"(SYS_exit)  // quick_exit
-);
+    : [exit] "i"(SYS_exit), [mmap] "i"(SYS_mmap), [prot] "i"(PROT_READ | PROT_EXEC), [flag] "i"(MAP_PRIVATE));
 
 // PPC64LE ELFv2 ABI:
 //   (r3, r4) <- function(r3, r4, r5, r6, r7, r8, r9, r10)
@@ -78,19 +79,20 @@ __asm__(
     ".type loader, @function;"
 
     "loader:"
-    "mr %%r15, %%r3;"  // save loader base
+    "stdu %%r1, -%[frame_header](%%r1);"  // setup frame back chain
+    "mr %%r15, %%r3;"                     // save loader base
 
-    "mr %%r3, %%r1;"   // loader_param on stack
-    "mr %%r4, %%r17;"  // total_memsz for PIE elf
-    "mr %%r5, %%r18;"  // loader_reg_flags_t
-    "bl loader_main;"  // now r17, r18 can be dropped, r7 is already set to fd.
+    "ld %%r3, 0(%%r1);"  // loader_param on stack
+    "mr %%r4, %%r17;"    // total_memsz for PIE elf
+    "mr %%r5, %%r18;"    // loader_reg_flags_t
+    "bl loader_main;"    // now r17, r18 can be dropped, r7 is already set to fd.
     "cmpdi %%r3, 0;"
     "blt quick_exit;"  // fail with -errno in r3
 
-    "ld %%r5, %[reg_off](%%r1);"  // dst, reuse r3 and r4
-    "mr %%r6, %%r1;"              // src
-    "mr %%r1, %%r5;"              // allocate space
-
+    "ld %%r6, 0(%%r1);"                   // src
+    "ld %%r5, %[reg_off](%%r6);"          // dst, reuse r3 and r4
+    "std %%r5, -%[frame_header](%%r5);"   // setup frame back chain before allocating
+    "addi %%r1, %%r5, -%[frame_header];"  // allocate space
     "bl loader_fix_stack;"
 
     "li %%r0, %[munmap];"
@@ -106,4 +108,5 @@ __asm__(
     ".long 0x30393039;"  // 4-byte Magic marker (Tracer needs to match this)
     "loader_end:"
     :
-    : [munmap] "i"(SYS_munmap), [reg_off] "i"(offsetof(loader_param_t, regs._M_SP)));
+    : [munmap] "i"(SYS_munmap), [reg_off] "i"(offsetof(loader_param_t, regs._M_SP)),
+      [frame_header] "i"(PPC_FRAME_HEADER), [exit] "i"(SYS_exit));

@@ -19,7 +19,7 @@ SECTIONS {
   ASSERT(loader_loader_end - loader_loader == 28, "loader_loader size is not 28 on riscv64")
   ASSERT(loader_end - trap_ok_marker == 14, "ok marker size is not 14")
 #elif defined(__powerpc64__)
-  ASSERT(loader_loader_end - loader_loader == 12*4, "loader_loader size is not 12*4 on powerpc64le")
+  ASSERT(loader_loader_end - loader_loader == 14*4, "loader_loader size is not 14*4 on powerpc64le")
   ASSERT(loader_end - trap_ok_marker == 16, "ok marker size is not 16")
 #endif
 

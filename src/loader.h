@@ -140,6 +140,7 @@ typedef struct pt_regs common_regs_t;
 #  define _N_SYS_A_I5 r8
 #  define _N_SYS_CLOBBERS , "r9", "r10", "r11", "r12", "cr0", "ctr", "lr"
 
+#  define PPC_FRAME_HEADER 32
 #endif
 
 #ifdef ARCH_X64

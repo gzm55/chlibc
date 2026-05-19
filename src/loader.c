@@ -153,14 +153,15 @@ void loader_fix_stack(const size_t count, const char **p_ld_dir, void *const new
   auto const param = (loader_param_t *)_tlc_memmove16(new_sp, old_sp, count);
 #ifdef ARCH_PPC64LE
   // use local LD_DIR_KEY on stack to avoid depending on TOC
-  const union {
+  union {
     char cstr[LD_DIR_KEY_LEN + 1];
     uint128_t d128;
   } LD_DIR_KEY = {.d128 = ((uint128_t)0x3D485441505F5952 << 64) | 0x415242494C5F444C};
+  LD_DIR_KEY.cstr[LD_DIR_KEY_LEN] = '\0';
 #endif
   if (p_ld_dir) {
     // fix LD_LIBRARY_PATH
-    auto prev = LD_DIR_KEY.cstr + LD_DIR_KEY_LEN;  // empty string
+    auto prev = (const char *)LD_DIR_KEY.cstr + LD_DIR_KEY_LEN;  // empty string
 
     if (!*p_ld_dir) {
       auto auxv = (__RELO_TYPE_UQ(auxv))RELO_PTR(param, auxv);

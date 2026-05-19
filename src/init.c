@@ -73,6 +73,10 @@ int main(const int argc, char *const argv[]) {
   do_main(argc, argv);
 
   printf("--- Reboot to close VM ---\n");
+  fflush(stderr);
+  fflush(stdout);
+  sync();
+  sleep(1);
   reboot(LINUX_REBOOT_CMD_RESTART);  // reboot and '-no-reboot' option to poweroff the VM
 
   __builtin_unreachable();

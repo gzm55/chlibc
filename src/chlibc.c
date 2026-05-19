@@ -53,6 +53,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <sys/procfs.h>
 #include <sys/ptrace.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -918,12 +919,12 @@ static bool init_chlibc_root() {
     rst = true;  // CHLIBC_PREFIX
   else if (GETENV_SAFE("CONDA_PREFIX") && realpath(env, chlibc_root))
     rst = true;  // CONDA_PREFIX
-  else if (dirname(strcpy(chlibc_root, chlibc_info.path)))
+  else if (dirname(dirname(strcpy(chlibc_root, chlibc_info.path))))
     rst = true;  // dirname($0)/..
 
   if (rst) {
     chlibc_root_len = strlen(chlibc_root);
-    if ('/' != chlibc_root[chlibc_root_len]) {
+    if ('/' != chlibc_root[chlibc_root_len - 1]) {
       chlibc_root[chlibc_root_len++] = '/';
       chlibc_root[chlibc_root_len] = '\0';
     }
@@ -1398,13 +1399,12 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
   }
 
   // the first stop, do handshake
-  if (WIFEXITED(status)) {
+  if (WIFEXITED(status))
     _Exit(WEXITSTATUS(status));  // child exits by exit()
-  } else if (WIFSIGNALED(status)) {
+  else if (WIFSIGNALED(status))
     _Exit(128 + WTERMSIG(status));  // child exits by signal
-  } else if (!WIFSTOPPED(status)) {
+  else if (!WIFSTOPPED(status))
     kill9_child_and_exit(child, 67);
-  }
 
 #ifdef ENABLE_DEBUG_LOG
   const int sig =
@@ -1441,14 +1441,14 @@ static void ptrace_handshake_as_tracer_or_die(const pid_t child) {
   {
     union {
       common_regs_t regs;
-      char data[1024];
+      uint64_t data[ELF_NGREG + 1];
     } regs_buffer;
-    static_assert(sizeof(regs_buffer) == sizeof(regs_buffer.data));
     static_assert(sizeof(regs_buffer) > sizeof(regs_buffer.regs));
+    static_assert(sizeof(regs_buffer.regs) % sizeof(regs_buffer.regs._M_PC) == 0);
     struct iovec iov = {.iov_base = &regs_buffer, .iov_len = sizeof(regs_buffer)};
     auto const r = PT_CALL_S(PTRACE_GETREGSET, child, NT_PRSTATUS, &iov);
     // when the first child is just attached, it must be a 64bit native process
-    if (PT_FAIL(r) || iov.iov_len != sizeof(regs_buffer.regs))
+    if (PT_FAIL(r) || iov.iov_len != sizeof(regs_buffer.data) - sizeof(regs_buffer.data[0]))
       kill9_child_and_exit(child, 72);
   }
 
@@ -1825,15 +1825,11 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   regs.s10 = PROT_READ | PROT_EXEC;
   regs.s11 = SYS_mmap;
 #else  // defined(ARCH_PPC64LE)
+  // Note: On PPC64, all syscall arguments are volatile
   regs._M_SYS_NR = SYS_openat;
   regs._M_SYS_ARG1 = 0;              // If the pathname given in path is absolute, then dirfd is ignored.
   regs._M_SYS_ARG2 = r_chlibc_path;  // absolute path
   regs._M_SYS_ARG3 = O_RDONLY;
-  regs._M_SYS_ARG4 = MAP_PRIVATE;
-  regs._M_SYS_ARG5 = loader_info.filesz;
-  regs._M_SYS_ARG6 = 0;
-  regs.gpr[30] = PROT_READ | PROT_EXEC;
-  regs.gpr[31] = SYS_mmap;
 #endif
 
   // Upload to stack
@@ -1856,6 +1852,41 @@ static handle_exec_result_t handle_exec(const pid_t pid, exec_arg_t exec_arg[sta
   PT_OK_CALL(pt_set(pid, &regs), return HEXEC_FATAL);
 
   return HEXEC_OK;
+}
+
+static bool loader_just_munmap(const common_regs_t regs[static 1]) {
+  auto const trap_munmap_fail_marker_vaddr =
+      loader_info.entry_vaddr + (uintptr_t)trap_munmap_fail_marker - (uintptr_t)&loader;
+  auto const loader_base =
+#ifdef ARCH_X64
+      regs->_M_SYS_ARG1;
+#else
+      regs->_M_S1;
+#endif
+  return regs->_M_SYS_NR_ORIG == SYS_munmap && regs->_M_SYS_ARG2 == loader_info.filesz && regs->_M_SYS_RET == 0 &&
+         regs->_M_PC == loader_base + trap_munmap_fail_marker_vaddr;
+}
+
+static bool jump_to_new_interp(const pid_t pid, const uint64_t curr_sp) {
+#ifdef ARCH_PPC64LE
+#  define FRAME_HEADER PPC_FRAME_HEADER
+#else
+#  define FRAME_HEADER 0
+#endif
+  // download restoring regs
+  common_regs_t regs;
+  static_assert(offsetof(loader_param_t, regs) == 0);
+  static_assert(FRAME_HEADER % 8 == 0);
+  PT_READ_BULKS_FAST(pid, curr_sp + FRAME_HEADER, &regs, sizeof(regs), return false);
+
+  // run new interp
+  PT_OK_CALL(pt_set(pid, &regs), return false);
+
+  // clear the stack
+  static const char z[align_u(sizeof(regs) + FRAME_HEADER + 512, sizeof(uint64_t))] = {0};
+  PT_WRITE_BULKS(pid, curr_sp - 512, z, sizeof(z), false);
+  return true;
+#undef FRAME_HEADER
 }
 
 // handle trap events from tracees
@@ -1900,31 +1931,9 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     return HTRAP_USER;  // skip unknown trap
   }
 
-  auto const trap_munmap_fail_marker_vaddr =
-      loader_info.entry_vaddr + (uintptr_t)trap_munmap_fail_marker - (uintptr_t)&loader;
-  auto const loader_base =
-#ifdef ARCH_X64
-      regs._M_SYS_ARG1;
-#else
-      regs._M_S1;
-#endif
-  if ((PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) && regs._M_SYS_NR_ORIG == SYS_munmap &&
-      regs._M_SYS_ARG2 == loader_info.filesz &&
-      (regs._M_PC - loader_base) == trap_munmap_fail_marker_vaddr) {  // loader() is just unloaded
+  if ((PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) && loader_just_munmap(&regs)) {
   jmp_interp:
-    auto const curr_sp = regs._M_SP;
-    // download restoring regs
-    static_assert(offsetof(loader_param_t, regs) == 0);
-    PT_READ_BULKS_FAST(pid, curr_sp, &regs, sizeof(regs), return HTRAP_FATAL);
-
-    // clear the stack
-    static const char z[align_u(sizeof(regs) + 512, sizeof(uint64_t))] = {0};
-    PT_WRITE_BULKS(pid, curr_sp - 512, z, sizeof(z), false);
-
-    // run new interp
-    PT_OK_CALL(pt_set(pid, &regs), return HTRAP_FATAL);
-
-    return ok_result;
+    return jump_to_new_interp(pid, regs._M_SP) ? ok_result : HTRAP_FATAL;
   }
 
   ERR("cannot read 8 bytes from RIP[0:7]");
@@ -2092,8 +2101,23 @@ static void process(const pid_t pid, const int status, const int exitsig) {
     case SIGSEGV:
       [[fallthrough]];
     case SIGSYS:
-      DEBUG(pid, 0, stopsig, "process Core Dump Signals");
-      deliver_sig = exitsig == SIGKILL ? SIGKILL : stopsig;
+      do {
+        common_regs_t regs;
+        PT_OK_CALL(pt_get(pid, &regs), break);
+        if (stopsig == SIGSEGV &&
+#ifdef ARCH_X64
+            regs._M_SYS_NR_ORIG == UINT64_C(-1) && (regs._M_SYS_NR_ORIG = SYS_munmap) &&
+#endif
+            loader_just_munmap(&regs)) {
+          // after munmap the loader, SIGSEGV of fetching the next instruction comes before the SIGTRAP of single step
+          jump_to_new_interp(pid, regs._M_SP);
+          DEBUG(pid, 0, stopsig, "Jump to interp via SIGSEGV");
+          deliver_sig = 0;
+        } else {
+          DEBUG(pid, 0, stopsig, "process Core Dump Signals");
+          deliver_sig = exitsig == SIGKILL ? SIGKILL : stopsig;
+        }
+      } while (false);
       break;
 
     case SIGSTOP:
