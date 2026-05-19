@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -eufo pipefail
-set -x
 
 arch="${1:?arch}"
 build_dir="${2:?build_dir}"
@@ -48,12 +47,43 @@ if ! command -v "$QEMU"; then
   exit 1
 fi
 
-exec "$QEMU" \
-	-machine "$MACHINE" \
-	-cpu "$CPU" \
-	-m 512m \
-	-nographic \
-	-no-reboot \
-	-kernel "$BASE_DIR/dl-cache/kernel/$arch/vmlinuz-$kernel_ver" \
-	-initrd "$build_dir/initramfs.cpio.gz" \
-	-append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc-dbg dump-args AA BB"
+run_with_timeout_killgroup() {
+  local timeout_sec="$1"
+  shift
+
+  set -m
+  "$@" &
+  local qemu_pid=$!
+
+  (
+    sleep "$timeout_sec"
+    kill -TERM "-$qemu_pid" 2>/dev/null
+    sleep 1
+    kill -KILL "-$qemu_pid" 2>/dev/null
+  ) &
+  local killer_pid=$!
+  set +m
+
+  wait "$qemu_pid" 2>/dev/null
+  kill -9 "-$killer_pid" 2>/dev/null
+}
+
+run_with_timeout_killgroup 30 "$QEMU" \
+  -machine "$MACHINE" \
+  -cpu "$CPU" \
+  -m 512m \
+  -nographic \
+  -no-reboot \
+  -kernel "$BASE_DIR/dl-cache/kernel/$arch/vmlinuz-$kernel_ver" \
+  -initrd "$build_dir/initramfs.cpio.gz" \
+  -append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc-dbg dump-args AA BB" 2>&1 \
+| tee "$build_dir/vm-test.log" || :
+
+if grep -qF "FATAL: kernel too old" "$build_dir/vm-test.log"; then
+  echo "PASS: old kernel $kernel_ver on $arch"
+elif grep -qF "/sysroot/lib64/libdl.so" "$build_dir/vm-test.log"; then
+  echo "PASS: kernel $kernel_ver on $arch"
+else
+  echo "FAIL: kernel $kernel_ver on $arch" >&2
+  exit 1
+fi

@@ -23,7 +23,7 @@ aarch64)
 esac
 
 CACHE_DIR="$(cd -- "$(dirname -- "$0")"; pwd)/dl-cache"
-if [[ ! -d "${CONDA_PREFIX-}" ]]; then
+if [[ ${PIXI_ENVIRONMENT_NAME-} != "$pixi_env" ]]; then
   # shellcheck disable=SC2016
   CONDA_PREFIX=$("$CACHE_DIR/../../pixiw" run -e "$pixi_env" sh -c 'echo "$CONDA_PREFIX"')
 fi

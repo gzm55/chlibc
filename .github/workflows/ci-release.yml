@@ -69,6 +69,12 @@ jobs:
             fi
           done
 
+      - name: Install QEMU Systems
+        run: sudo apt install -y qemu-system-x86 qemu-system-arm qemu-system-ppc
+
+      - name: VM tests
+        run: pixi run vm-test
+
       - name: Verify Checksums against Tag Message
         if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
         run: |

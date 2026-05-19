@@ -100,6 +100,20 @@ conda-build-x86_64 = { cmd = "rattler-build build --output-dir build/output-cond
 conda-build-aarch64 = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-aarch64", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
 conda-build-ppc64le = { cmd = "rattler-build build --output-dir build/output-conda --recipe conda/recipe.yaml --target-platform linux-ppc64le", env = { CONDA_OVERRIDE_GLIBC = "2.17", _CONDA_BUILD_LOCAL = "1" } }
 
+vm-test = [
+  { task = "build" },
+  { task = "vm-test-x86_64-2_6_18" },
+  { task = "vm-test-x86_64-2_6_32" },
+  { task = "vm-test-x86_64-3_10_0" },
+  { task = "vm-test-aarch64" },
+  { task = "vm-test-ppc64le" },
+]
+vm-test-x86_64-2_6_18 = { cmd = "vm-test/run.sh x86_64 build/clang-x86_64 2.6.18" }
+vm-test-x86_64-2_6_32 = { cmd = "vm-test/run.sh x86_64 build/clang-x86_64 2.6.32" }
+vm-test-x86_64-3_10_0 = { cmd = "vm-test/run.sh x86_64 build/clang-x86_64 3.10.0" }
+vm-test-aarch64 = { cmd = "vm-test/run.sh aarch64 build/clang-aarch64 3.19.0" }
+vm-test-ppc64le = { cmd = "vm-test/run.sh ppc64le build/gcc-powerpc64le 3.10.0 gcc-powerpc64le" }
+
 pre-commit-install = "lefthook install"
 lint = "lefthook run pre-commit --all-files --no-stage-fixed"
 fmt = { cmd = "lefthook run pre-commit --all-files --no-stage-fixed", env = { LEFTHOOK_EXCLUDE = "lint" } }
