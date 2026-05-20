@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -eufo pipefail
-set -x
 
 arch="${1:?arch}"
 build_dir="${2:?build_dir}"

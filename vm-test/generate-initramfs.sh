@@ -45,10 +45,8 @@ mkdir -p -- "$rootfs_dir/bin"
 
 if command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
   pushd -- "$rootfs_dir" || exit 1
-  rpm2cpio "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" | cpio -idmv \
-        'lib*/ld*.so*' \
-        'lib*/libc.so*' \
-        'lib*/libc-*.so' 2>/dev/null
+  rpm2cpio "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" \
+  | cpio -idmv '.*/lib*/ld*.so*' '.*/lib*/libc.so*' '.*/lib*/libc-*.so' 2>/dev/null
   popd
 else
   tar xzvf "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" -C "$rootfs_dir" --exclude='*/tls/*' 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
