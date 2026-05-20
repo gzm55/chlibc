@@ -22,17 +22,18 @@ aarch64)
   ;;
 esac
 
-CACHE_DIR="$(cd -- "$(dirname -- "$0")"; pwd)/dl-cache"
+CURR_DIR=$(cd -- "$(dirname -- "$0")"; pwd)
+CACHE_DIR="$CURR_DIR/dl-cache"
 if [[ ${PIXI_ENVIRONMENT_NAME-} != "$pixi_env" ]]; then
   # shellcheck disable=SC2016
-  CONDA_PREFIX=$("$CACHE_DIR/../../pixiw" run -e "$pixi_env" sh -c 'echo "$CONDA_PREFIX"')
+  CONDA_PREFIX=$("$CURR_DIR/../pixiw" run -e "$pixi_env" sh -c 'echo "$CONDA_PREFIX"')
 fi
 if [[ ! $CONDA_PREFIX && ! -d "$CONDA_PREFIX/$ARCH_TRIPLE/sysroot/lib64" ]]; then
   echo "[ERROR] cannot find sysroot/lib64/ for env $pixi_env"
   exit 1
 fi
 
-"$CACHE_DIR/../prepare-kernel-glibc.sh"
+"$CURR_DIR/prepare-kernel-glibc.sh"
 
 if [[ ! -d "$CACHE_DIR/kernel/$arch" ]] || [[ ! -d "$CACHE_DIR/glibc/$arch" ]]; then
   echo "[ERROR] no kernel or glibc for arch $arch"
