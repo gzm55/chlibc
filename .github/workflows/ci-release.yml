@@ -70,7 +70,10 @@ jobs:
           done
 
       - name: Install QEMU Systems
-        run: sudo apt install -y rpm2cpio qemu-system-x86 qemu-system-arm qemu-system-ppc
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: rpm2cpio qemu-system-x86 qemu-system-arm qemu-system-ppc
+          version: 1.0
 
       - name: VM tests
         run: pixi run vm-test
