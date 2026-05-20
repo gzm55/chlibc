@@ -64,7 +64,6 @@ if(DEFINED ENV{LDFLAGS} AND "$ENV{LDFLAGS}" MATCHES "Wl,-rpath,")
   unset(_filtered_ldflags)
 endif()
 
-string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " -v")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:--sort-common")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,relro")
 string(APPEND CMAKE_EXE_LINKER_FLAGS_INIT " LINKER:-z,now")

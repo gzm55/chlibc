@@ -29,6 +29,7 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   add_compile_options(-march=armv8-a)
   add_compile_options(-mtune=neoverse-n1)
   add_compile_options(-mbranch-protection=bti) # enable BTI
+  add_compile_options(-mno-outline-atomics)
 
   add_compile_options(-U__POST_PRJ_ADD_C_FLAGS)
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv64")

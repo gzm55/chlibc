@@ -76,6 +76,8 @@ tests:
       build:
         - file
         - coreutils
+        - if: target_platform in ["linux-aarch64"]
+          then: zstd
 
 about:
   summary: 'A userspace transparent ld-linux interpreter and glibc swapper.'
