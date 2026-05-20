@@ -65,5 +65,8 @@ output="$(cd -- "$rootfs_dir/.."; pwd)/$(basename -- "$output")"
 
 pushd -- "$rootfs_dir"
 find . \
-| "$CACHE_DIR/../../pixiw" run cpio -o -H newc --owner 0:0 \
+| "$CURR_DIR/../pixiw" run cpio -o -H newc --owner 0:0 \
 | gzip > "$output"
+popd
+
+gunzip -c "$output" | "$CURR_DIR/../pixiw" run cpio -itv
