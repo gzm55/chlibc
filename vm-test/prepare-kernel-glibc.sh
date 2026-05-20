@@ -28,7 +28,11 @@ download_extract_rpm() {
   fi
 
   printf "[DOWNLOAD] extract %s of %s to %s\n" "$inner_path" "$url" "$dest"
-  curl -fsSL --retry 3 "$url" | tar xzOf - "$inner_path" > "$dest"
+  if command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
+    curl -fsSL --retry 3 "$url" | rpm2cpio - | cpio -iv --to-stdout "$inner_path" > "$dest"
+  else
+    curl -fsSL --retry 3 "$url" | tar xzOf - "$inner_path" > "$dest"
+  fi
 }
 
 ### KERNELS

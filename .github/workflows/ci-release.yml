@@ -70,7 +70,7 @@ jobs:
           done
 
       - name: Install QEMU Systems
-        run: sudo apt install -y qemu-system-x86 qemu-system-arm qemu-system-ppc
+        run: sudo apt install -y rpm2cpio qemu-system-x86 qemu-system-arm qemu-system-ppc
 
       - name: VM tests
         run: pixi run vm-test
