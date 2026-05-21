@@ -105,15 +105,13 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          # Extract binaries and Generate checksums
+          # Extract binaries
           for cfg in ${{ env.ARCH_MAP }}; do
             ARCH=${cfg%%:*}
             SRC_PATH=${cfg#*:}
             TARGET="artifacts/chlibc-$ARCH"
             cp "$SRC_PATH/bin/chlibc" "$TARGET"
-            sha256sum "$TARGET" | sed 's|artifacts/||' > "$TARGET.sha256"
           done
-          cat artifacts/*.sha256 > artifacts/checksums.txt
 
       - name: Upload Artifacts for Release
         if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
