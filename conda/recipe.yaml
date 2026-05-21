@@ -56,7 +56,7 @@ requirements:
     - if: target_platform in ["linux-64", "linux-aarch64"]
       then: llvm-tools
     - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: clang-tools
+      then: clang-tools >=22
   host:
   run:
     - __glibc
@@ -76,8 +76,7 @@ tests:
       build:
         - file
         - coreutils
-        - if: target_platform in ["linux-aarch64"]
-          then: zstd
+        - zstd
 
 about:
   summary: 'A userspace transparent ld-linux interpreter and glibc swapper.'
