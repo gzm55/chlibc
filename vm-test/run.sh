@@ -78,7 +78,7 @@ run_with_timeout_killgroup 30 "$QEMU" \
   -no-reboot \
   -kernel "$BASE_DIR/dl-cache/kernel/$arch/vmlinuz-$kernel_ver" \
   -initrd "$build_dir/initramfs.cpio.gz" \
-  -append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc-dbg dump-args AA BB" \
+  -append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc dump-args AA BB" \
 | tee "$build_dir/vm-test.log" || :
 
 if grep -qF "FATAL: kernel too old" "$build_dir/vm-test.log"; then

@@ -19,9 +19,8 @@ static inline void do_mount(const char *source, const char *target, const char *
 
 static inline void print_env() {
   printf("\n--- Environment Variables ---\n");
-  for (char **env = environ; *env != NULL; env++) {
+  for (char **env = environ; *env != NULL; env++)
     printf("%s\n", *env);
-  }
   printf("\n");
 }
 
@@ -76,7 +75,7 @@ int main(const int argc, char *const argv[]) {
   fflush(stderr);
   fflush(stdout);
   sync();
-  sleep(1);
+  sleep(5);
   reboot(LINUX_REBOOT_CMD_RESTART);  // reboot and '-no-reboot' option to poweroff the VM
 
   __builtin_unreachable();

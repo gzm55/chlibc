@@ -102,9 +102,9 @@ conda-build-ppc64le = { cmd = "rattler-build build --output-dir build/output-con
 
 vm-test = [
   { task = "build" },
-  { task = "vm-test-x86_64-3_10_0" },
   { task = "vm-test-x86_64-2_6_18" },
   { task = "vm-test-x86_64-2_6_32" },
+  { task = "vm-test-x86_64-3_10_0" },
   { task = "vm-test-aarch64" },
   { task = "vm-test-ppc64le" },
 ]
