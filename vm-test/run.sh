@@ -15,10 +15,12 @@ fi
 BASE_DIR=$(dirname -- "$0")
 "$BASE_DIR"/generate-initramfs.sh "${arch}" "$build_dir/initramfs.cpio.gz" "${pixi_env}"
 
+K_ARGS="quiet"
+
 case "$arch" in
 x86_64)
   MACHINE="pc,i8042=off"
-  K_ARGS="console=ttyS0"
+  K_ARGS+=" console=ttyS0"
   if [[ $kernel_ver == "2.6.18" ]];then
     MACHINE+=",acpi=off"
     K_ARGS+=" noapic"
@@ -28,14 +30,14 @@ x86_64)
   ;;
 ppc64le)
   MACHINE="pseries"
-  K_ARGS="console=hvc0"
+  K_ARGS+=" console=hvc0"
   # chlibc supports power7, but the testing glibc in sysroot requires power8
   CPU=power8
   QEMU="qemu-system-ppc64"
   ;;
 aarch64)
   MACHINE="virt,acpi=off"
-  K_ARGS="console=ttyAMA0"
+  K_ARGS+=" console=ttyAMA0"
   CPU=cortex-a53
   QEMU="qemu-system-$arch"
   ;;
@@ -76,7 +78,7 @@ run_with_timeout_killgroup 30 "$QEMU" \
   -no-reboot \
   -kernel "$BASE_DIR/dl-cache/kernel/$arch/vmlinuz-$kernel_ver" \
   -initrd "$build_dir/initramfs.cpio.gz" \
-  -append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc-dbg dump-args AA BB" 2>&1 \
+  -append "$K_ARGS PATH=/bin CHLIBC_GLIBC_HOME=/sysroot/lib64 chlibc-dbg dump-args AA BB" \
 | tee "$build_dir/vm-test.log" || :
 
 if grep -qF "FATAL: kernel too old" "$build_dir/vm-test.log"; then
