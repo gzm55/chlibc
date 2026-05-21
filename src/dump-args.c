@@ -250,5 +250,8 @@ int main(int argc, char *argv[]) {
       perror("Open /proc/self/maps failed");
   }
 
+  fflush(stderr);
+  fflush(stdout);
+
   return 0;
 }

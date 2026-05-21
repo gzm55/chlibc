@@ -75,7 +75,7 @@ int main(const int argc, char *const argv[]) {
   fflush(stderr);
   fflush(stdout);
   sync();
-  sleep(5);
+  sleep(1);
   reboot(LINUX_REBOOT_CMD_RESTART);  // reboot and '-no-reboot' option to poweroff the VM
 
   __builtin_unreachable();
