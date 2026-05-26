@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 
@@ -81,44 +82,106 @@ static inline void *_tlc_memmove16(void *dest, const void *src, size_t count) {
 #define EVAL8(...) EVAL4(EVAL4(__VA_ARGS__))
 #define EVAL4(...) EVAL2(EVAL2(__VA_ARGS__))
 #define EVAL2(...) __VA_ARGS__
+#define EVAL(...) __VA_ARGS__
 #define NEXT_EXPAND_ROUND()
 #define LOOP8I(op, ...) __VA_OPT__(EVAL8(LOOP8I_DO(op, 7, 6, 5, 4, 3, 2, 1, 0, __VA_ARGS__)))
 #define LOOP8I_DO(op, _7, _6, _5, _4, _3, _2, _1, idx, v, ...) \
   op(idx, v) __VA_OPT__(LOOP8I_DO_DELAY_TO NEXT_EXPAND_ROUND()()(op, -1, _7, _6, _5, _4, _3, _2, _1, __VA_ARGS__))
 #define LOOP8I_DO_DELAY_TO() LOOP8I_DO
-#define SYSCALL_BIND(i, exp) register const uint64_t a##i __asm__(_STR(_N_SYS_A_I##i)) = (uintptr_t)(exp);
-#define SYSCALL_READ_REG(i, exp) , "r"(a##i)
+#define SYSCALL_BIND(i, exp) register uint64_t a##i __asm__(_STR(_N_SYS_A_I##i)) = (uintptr_t)(exp);
+#define SYSCALL_R_REG(i, exp) , "r"(a##i)
+#define SYSCALL_RW_REG(i, exp) , "+r"(a##i)
+#define LIST_TAILS(_, ...) __VA_OPT__(, __VA_ARGS__)
+#define LIST_TTAILS(_1, _2, ...) __VA_OPT__(, __VA_ARGS__)
+#define LIST_TAILS2(_, ...) __VA_ARGS__
 
-#define ASM_SYSCALL(name, ...)                                                  \
-  ret __asm__(_STR(_N_SYS_RET));                                                \
-  register const uint64_t nr __asm__(_STR(_N_SYS_NR)) = SYS_##name;             \
-  LOOP8I(SYSCALL_BIND __VA_OPT__(, ) __VA_ARGS__)                               \
-  __asm__ volatile(_STR(_N_SYS_INST)                                            \
-                   : "=r"(ret)                                                  \
-                   : "r"(nr)LOOP8I(SYSCALL_READ_REG __VA_OPT__(, ) __VA_ARGS__) \
-                   : "memory" _N_SYS_CLOBBERS);                                 \
-  return ret
+#define LIST_DROP_FIRST_EMPTY(L) L
+#define LIST_DROP_FIRST_NOT_EMPTY(L, _1, ...) LIST_DROP_FIRST_DO_01 L __VA_OPT__(, ) __VA_ARGS__
+#define LIST_DROP_FIRST_DO_01(_1, ...) (__VA_ARGS__)
+#define LIST_DROP_FIRST_01(L, ...) LIST_DROP_FIRST##__VA_OPT__(_NOT)##_EMPTY(L __VA_OPT__(, ) __VA_ARGS__)
+#define LIST_DROP_FIRST_01_DELAY(...) LIST_DROP_FIRST_01 NEXT_EXPAND_ROUND()(__VA_ARGS__)
+#define LIST_DROP_FIRST_6(...)                                  \
+  EVAL4(EVAL LIST_DROP_FIRST_01_DELAY(LIST_DROP_FIRST_01_DELAY( \
+      LIST_DROP_FIRST_01_DELAY(LIST_DROP_FIRST_01_DELAY(LIST_DROP_FIRST_01_DELAY(LIST_DROP_FIRST_01(__VA_ARGS__)))))))
+
+#if defined(ARCH_X64)
+#  define _N_SYS_INST "syscall"
+#  define _N_SYS_CLOBBERS , "cc", "rcx", "r11"
+#  define ASM_SYSCALL_DO ASM_SYSCALL_DO_NR
+#elif defined(ARCH_ARM64)
+#  define _N_SYS_INST "svc #0"
+#  define _N_SYS_CLOBBERS
+#  define ASM_SYSCALL_DO ASM_SYSCALL_DO_A0
+#elif defined(ARCH_RISCV64)
+#  define _N_SYS_INST "ecall"
+#  define _N_SYS_CLOBBERS
+#  define ASM_SYSCALL_DO ASM_SYSCALL_DO_A0
+#elif defined(ARCH_PPC64LE)
+#  define _N_SYS_INST "sc; bns+ 1f; neg %%r3, %%r3; 1:"
+#  define _N_SYS_CLOBBERS "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "cr0", "ctr"
+#  define ASM_SYSCALL_DO ASM_SYSCALL_DO_A0V
+#endif
+
+#define ASM_SYSCALL(name, ...)                                \
+  register uint64_t nr __asm__(_STR(_N_SYS_NR)) = SYS_##name; \
+  LOOP8I(SYSCALL_BIND __VA_OPT__(, ) __VA_ARGS__)             \
+  ASM_SYSCALL_DO(name, __VA_ARGS__)
+
+#define ASM_SYSCALL_DO_NR(name, ...)                                                                         \
+  __asm__ volatile(_N_SYS_INST                                                                               \
+                   : "+r"(nr)                                                                                \
+                   : EVAL(LIST_TAILS2 NEXT_EXPAND_ROUND()(LOOP8I(SYSCALL_R_REG __VA_OPT__(, ) __VA_ARGS__))) \
+                   : "memory" _N_SYS_CLOBBERS);                                                              \
+  return (typeof(_tlc_##name(__VA_ARGS__)))nr
+
+#define ASM_SYSCALL_DO_A0(name, ...)                                            \
+  ASM_SYSCALL_DO_A0##__VA_OPT__(_NOT)##_EMPTY(name __VA_OPT__(, ) __VA_ARGS__); \
+  return (typeof(_tlc_##name(__VA_ARGS__)))a0
+#define ASM_SYSCALL_DO_A0_EMPTY(name)              \
+  register uint64_t a0 __asm__(_STR(_N_SYS_A_I0)); \
+  __asm__ volatile(_N_SYS_INST : "=r"(a0) : "r"(nr) : "memory" _N_SYS_CLOBBERS)
+#define ASM_SYSCALL_DO_A0_NOT_EMPTY(name, ...)                                                         \
+  __asm__ volatile(_N_SYS_INST                                                                         \
+                   : "+r"(a0)                                                                          \
+                   : "r"(nr)EVAL2(LIST_TTAILS NEXT_EXPAND_ROUND()(LOOP8I(SYSCALL_R_REG, __VA_ARGS__))) \
+                   : "memory" _N_SYS_CLOBBERS)
+
+#define ASM_SYSCALL_DO_A0V(name, ...)                                            \
+  ASM_SYSCALL_DO_A0V##__VA_OPT__(_NOT)##_EMPTY(name __VA_OPT__(, ) __VA_ARGS__); \
+  return (typeof(_tlc_##name(__VA_ARGS__)))a0
+#define ASM_SYSCALL_DO_A0V_EMPTY(name)             \
+  register uint64_t a0 __asm__(_STR(_N_SYS_A_I0)); \
+  __asm__ volatile(_N_SYS_INST : "=r"(a0) : "r"(nr) : "memory" EVAL(LIST_TAILS NEXT_EXPAND_ROUND()(_N_SYS_CLOBBERS)))
+#define ASM_SYSCALL_DO_A0V_NOT_EMPTY(name, ...)                                                 \
+  __asm__ volatile(_N_SYS_INST                                                                  \
+                   : EVAL(LIST_TAILS2 NEXT_EXPAND_ROUND()(LOOP8I(SYSCALL_RW_REG, __VA_ARGS__))) \
+                   : "r"(nr)                                                                    \
+                   : "memory", LIST_DROP_FIRST_6((_N_SYS_CLOBBERS), __VA_ARGS__))
 
 LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uint8_t *_tlc_mmap(void *const addr, const size_t length, const int prot, const int flags, const int fd,
                                  const off_t offset) {
-  register uint8_t *ASM_SYSCALL(mmap, addr, length, prot, flags, fd, offset);
+  ASM_SYSCALL(mmap, addr, length, prot, flags, fd, offset);
 }
 LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uint64_t _tlc_munmap(void *const addr, const size_t length) {
-  register uint64_t ASM_SYSCALL(munmap, addr, length);
+  ASM_SYSCALL(munmap, addr, length);
 }
+
 LOADER_SECTION(text)
 [[gnu::always_inline]]
-static inline int _tlc_open(const char *const path, const int flags) {
-  register int ASM_SYSCALL(openat, 0, path, flags);  // path must be a absolute path, so dirfd is ignored
+static inline int _tlc_openat(const int dirfd, const char *const path, const int flags) {
+  ASM_SYSCALL(openat, dirfd, path, flags);
 }
+// in _tlc_open(),  path must be a absolute path, so dirfd is ignored
+#define _tlc_open(...) _tlc_openat(0, __VA_ARGS__)
+
 LOADER_SECTION(text)
 [[gnu::always_inline]]
 static inline uint64_t _tlc_close(const int fd) {
-  register uint64_t ASM_SYSCALL(close, fd);
+  ASM_SYSCALL(close, fd);
 }
 
 constexpr auto LD_DIR_KEY_LEN = 16;
@@ -291,7 +354,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
 
   if (dyn_total_memsz) {
     // PIE elf, use placeholder to find a random base (try reuse old_base)
-    auto const rst = loader_mmap(old_base + m->vaddr, m, dyn_total_memsz, fd, sys_conf);
+    auto const rst = loader_mmap(old_base, m, dyn_total_memsz, fd, sys_conf);
     if (SYSCALL_FAIL(rst)) {
       info.stacksz = (typeof(info.stacksz))rst;
       goto FAIL;
@@ -344,6 +407,10 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
 
   param->regs._M_PC += (uintptr_t)base;  // update new interp entry in the backup regs
   param->regs._M_SP = (uintptr_t)align_d(old_sp - alloc_sz, STACK_ALIGNAS);  // save new sp in the backup regs
+#ifdef ARCH_PPC64LE
+  param->regs.gpr[12] = param->regs._M_PC;  // PPC64 ELFv2 ABI
+#endif
+
   info.stacksz = end - old_sp;
 
   if (info.ld_dir)

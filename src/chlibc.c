@@ -1931,7 +1931,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     return HTRAP_USER;  // skip unknown trap
   }
 
-  if ((PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO) && loader_just_munmap(&regs)) {
+  if ((PT_ERRNO(r) == EFAULT || PT_ERRNO(r) == EIO || PT_ERRNO(r) == EPERM) && loader_just_munmap(&regs)) {
   jmp_interp:
     return jump_to_new_interp(pid, regs._M_SP) ? ok_result : HTRAP_FATAL;
   }
@@ -2106,6 +2106,7 @@ static void process(const pid_t pid, const int status, const int exitsig) {
         PT_OK_CALL(pt_get(pid, &regs), break);
         if (stopsig == SIGSEGV &&
 #ifdef ARCH_X64
+            // reset orig nr to munmap when orig nr is -1
             regs._M_SYS_NR_ORIG == UINT64_C(-1) && (regs._M_SYS_NR_ORIG = SYS_munmap) &&
 #endif
             loader_just_munmap(&regs)) {

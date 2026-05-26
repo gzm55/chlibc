@@ -33,8 +33,6 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_S3 r13
 #  define _M_S4 r14
 
-#  define _N_SYS_INST syscall
-#  define _N_SYS_RET rax
 #  define _N_SYS_NR rax
 #  define _N_SYS_A_I0 rdi
 #  define _N_SYS_A_I1 rsi
@@ -42,7 +40,6 @@ typedef struct user_regs_struct common_regs_t;
 #  define _N_SYS_A_I3 r10
 #  define _N_SYS_A_I4 r8
 #  define _N_SYS_A_I5 r9
-#  define _N_SYS_CLOBBERS , "cc", "rcx", "r11"
 
 #elif defined(ARCH_ARM64)
 typedef struct user_pt_regs common_regs_t;
@@ -65,8 +62,6 @@ typedef struct user_pt_regs common_regs_t;
 #  define _M_S3 regs[22]
 #  define _M_S4 regs[23]
 
-#  define _N_SYS_INST svc #0
-#  define _N_SYS_RET x0
 #  define _N_SYS_NR x8
 #  define _N_SYS_A_I0 x0
 #  define _N_SYS_A_I1 x1
@@ -74,7 +69,6 @@ typedef struct user_pt_regs common_regs_t;
 #  define _N_SYS_A_I3 x3
 #  define _N_SYS_A_I4 x4
 #  define _N_SYS_A_I5 x5
-#  define _N_SYS_CLOBBERS
 
 #elif defined(ARCH_RISCV64)
 typedef struct user_regs_struct common_regs_t;
@@ -97,8 +91,6 @@ typedef struct user_regs_struct common_regs_t;
 #  define _M_S3 s3
 #  define _M_S4 s4
 
-#  define _N_SYS_INST ecall
-#  define _N_SYS_RET a0
 #  define _N_SYS_NR a7
 #  define _N_SYS_A_I0 a0
 #  define _N_SYS_A_I1 a1
@@ -106,7 +98,6 @@ typedef struct user_regs_struct common_regs_t;
 #  define _N_SYS_A_I3 a3
 #  define _N_SYS_A_I4 a4
 #  define _N_SYS_A_I5 a5
-#  define _N_SYS_CLOBBERS
 
 #elif defined(ARCH_PPC64LE)
 typedef struct pt_regs common_regs_t;
@@ -129,8 +120,6 @@ typedef struct pt_regs common_regs_t;
 #  define _M_S3 gpr[17]
 #  define _M_S4 gpr[18]
 
-#  define _N_SYS_INST sc
-#  define _N_SYS_RET r3
 #  define _N_SYS_NR r0
 #  define _N_SYS_A_I0 r3
 #  define _N_SYS_A_I1 r4
@@ -138,7 +127,6 @@ typedef struct pt_regs common_regs_t;
 #  define _N_SYS_A_I3 r6
 #  define _N_SYS_A_I4 r7
 #  define _N_SYS_A_I5 r8
-#  define _N_SYS_CLOBBERS , "r9", "r10", "r11", "r12", "cr0", "ctr", "lr"
 
 #  define PPC_FRAME_HEADER 32
 #endif
