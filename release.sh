@@ -25,7 +25,10 @@ fi
 RELEASE_VERSION="${DEV_VERSION%.dev}"
 echo "Step: Setting release version $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
-sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
+
+# bump the release version in conda recipe, but clear the archive hash
+sed -i.bak "s/\(release_version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
+sed -i.bak "s/\(release_hash: \)\"[^\"]*\"/\1\"\"/" conda/recipe.yaml
 
 git add pixi.toml conda/recipe.yaml
 git commit -m "chore: release v$RELEASE_VERSION"
@@ -44,9 +47,16 @@ for cfg in $ARCH_MAP; do
     CHECKSUMS_TEXT="${CHECKSUMS_TEXT}${hash}  chlibc-${arch}\n"
 done
 
+git tag "v$RELEASE_VERSION"
+SOURCE_HASH=$(printf "%b" "$CHECKSUMS_TEXT" \
+    | ./archive.sh - checksum.txt \
+    | sha256sum \
+    | awk '{print $1}')
+CHECKSUMS_TEXT="${CHECKSUMS_TEXT}${SOURCE_HASH}  source.tar.gz\n"
+
 TAG_MSG=$(printf "version %s\n\nSHA256 Checksums:\n%b" "$RELEASE_VERSION" "$CHECKSUMS_TEXT")
 
-git tag -a "v$RELEASE_VERSION" -m "$TAG_MSG"
+git tag -a -f "v$RELEASE_VERSION" -m "$TAG_MSG"
 
 echo "Step: Reverting to $DEV_VERSION for next bump"
 ./pixiw workspace version set "$DEV_VERSION"
@@ -57,8 +67,8 @@ echo "Step: Bumping $BUMP_TYPE..."
 
 NEXT_DEV_VERSION=$(./pixiw workspace version get)
 
-# update conda recipe
-sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$NEXT_DEV_VERSION\"/" conda/recipe.yaml
+# update the archive hash in conda recipe
+sed -i.bak "s/\(release_hash: \)\"\"/\1\"$SOURCE_HASH\"/" conda/recipe.yaml
 
 git add pixi.toml conda/recipe.yaml
 git commit -m "chore: bump version to $NEXT_DEV_VERSION"

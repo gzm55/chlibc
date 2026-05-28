@@ -2,11 +2,10 @@
 schema_version: 1
 
 context:
-  release_version: "0.1.6.dev"
-  release_hash: 46d6bc9871e03c8296404520c74ab887347a5cab27d3c4d4ca9fa004499ec88d
+  release_version: "0.1.3"
+  release_hash: "46d6bc9871e03c8296404520c74ab887347a5cab27d3c4d4ca9fa004499ec88d"
   is_dev: ${{ env.exists("_CONDA_BUILD_LOCAL") }}
   version: ${{ env.get("PIXI_PROJECT_VERSION") if is_dev else release_version }}
-
 
 package:
   name: "chlibc"
@@ -18,7 +17,8 @@ source:
       path: ..
   - if: not is_dev
     then:
-      url: https://github.com/gzm55/chlibc/archive/refs/tags/v${{ version }}.tar.gz
+      # use the source archive with checksum.txt
+      url: https://github.com/gzm55/chlibc/releases/download/v${{ version }}/source.tar.gz
       sha256: ${{ release_hash }}
 
 build:
@@ -44,7 +44,7 @@ build:
 requirements:
   build:
     - ${{ compiler('c') }}
-    - ${{ stdlib("c") }}
+    - ${{ stdlib('c') }}
 
     - cmake >=4.2
     - ninja
@@ -56,15 +56,15 @@ requirements:
     - if: target_platform in ["linux-64", "linux-aarch64"]
       then: llvm-tools
     - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: clang-tools >=22
+      then: clang-tools
   host:
   run:
     - __glibc
 
   ignore_run_exports:
     from_package:
-      - ${{ compiler('c') }}
-      - ${{ stdlib('c') }}
+      - ${{ compiler('c') }}  # do not depend on libgcc
+      - ${{ stdlib('c') }}  # do not introduce __glibc version limit
 
 tests:
   - script:
@@ -77,6 +77,24 @@ tests:
         - file
         - coreutils
         - zstd
+
+  - if: not is_dev
+    then:
+      script:
+        - echo Verifying the binary checksum
+        - |
+          case ${{ target_platform }} in
+            linux-64)      NATIVE_ARCH="x86_64" ;;
+            linux-aarch64) NATIVE_ARCH="aarch64" ;;
+            linux-ppc64le) NATIVE_ARCH="ppc64le" ;;
+            *)             NATIVE_ARCH="unknown" ;;
+          esac
+        - EXPECTED_HASH=$(grep "chlibc-$NATIVE_ARCH" checksum.txt | awk '{print $1}')
+        - echo "Expected hash $EXPECTED_HASH"
+        - echo "$EXPECTED_HASH  $PREFIX/bin/chlibc" | sha256sum -c
+      files:
+        source:
+          - checksum.txt
 
 about:
   summary: 'A userspace transparent ld-linux interpreter and glibc swapper.'

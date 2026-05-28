@@ -98,7 +98,20 @@ jobs:
               echo OK
             fi
           done
-          echo "Checksums verified."
+          echo "Binary checksums verified."
+
+          # Pack and verify source.tar.gz
+          echo "Generating and verifying source.tar.gz..."
+          mkdir -p artifacts
+
+          EXPECTED_SOURCE=$(echo "$TAG_MSG" | grep "source.tar.gz" | awk '{print $1}')
+          ACTUAL_SOURCE=$(git for-each-ref --format='%(contents)' refs/tags/${{ github.ref_name }} | awk '/SHA256 Checksums:/{flag=1; next} flag && !/source\.tar\.gz/ {print $0}' | ./archive.sh - checksum.txt | tee artifacts/source.tar.gz | sha256sum | awk '{print $1}')
+          echo "Source | Expected: ${EXPECTED_SOURCE:-N/A} | Actual: $ACTUAL_SOURCE"
+          if [ -z "$EXPECTED_SOURCE" ] || [ "$EXPECTED_SOURCE" != "$ACTUAL_SOURCE" ]; then
+            echo "Error: Tag checksum mismatch for source.tar.gz!" >&2
+            exit 1
+          fi
+          echo "All checksums verified successfully."
 
       - name: Prepare Release Artifacts
         if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')

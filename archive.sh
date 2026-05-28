@@ -4,7 +4,16 @@ set -eufo pipefail
 
 COMMIT_HASH="${1:-HEAD}"
 EXTRA_PATH="${2:-}"
-PREFIX=$(git describe "$COMMIT_HASH")
+
+DESCRIBE_ARGS=( describe )
+if [[ $COMMIT_HASH == -* ]]; then
+  DESCRIBE_ARGS+=( --tags )
+  COMMIT_HASH="${COMMIT_HASH#-}"
+  COMMIT_HASH="${COMMIT_HASH:-HEAD}"
+fi
+
+PREFIX=$(git "${DESCRIBE_ARGS[@]}" -- "$COMMIT_HASH")
+
 PREFIX="chlibc-$PREFIX/"
 ARCHIVE_ARGS=(--format=tar --prefix="$PREFIX")
 
