@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -eufo pipefail
+[ "${DEBUG-}" != true ] || set -x
 
 COMMIT_HASH="${1:-HEAD}"
 EXTRA_PATH="${2:-}"
@@ -17,7 +18,7 @@ PREFIX=$(git "${DESCRIBE_ARGS[@]}" -- "$COMMIT_HASH")
 PREFIX="chlibc-$PREFIX/"
 ARCHIVE_ARGS=(--format=tar --prefix="$PREFIX")
 
-if [[ "${EXTRA_PATH-}" ]]; then
+if [[ ${EXTRA_PATH-} ]]; then
   EXTRA_CONTENT="$(cat; echo x)"
   ARCHIVE_ARGS+=("--add-virtual-file=\"$PREFIX$EXTRA_PATH\":${EXTRA_CONTENT%x}")
 fi

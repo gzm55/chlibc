@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+[ "${DEBUG-}" != true ] || set -x
 
 if [ -n "$(git status --porcelain -uno)" ]; then
     echo "Error: Working directory is not clean."
