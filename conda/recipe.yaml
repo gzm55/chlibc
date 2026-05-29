@@ -2,14 +2,14 @@
 schema_version: 1
 
 context:
-  release_version: "0.1.6"
+  version: "0.1.6"
   release_hash: "ed86a942ee86ba26ec33e8e0cc4dd4f7563674d9df7ce632651425499c7a0d93"
   dev_version: ${{ env.get('PIXI_PROJECT_VERSION') if env.exists('PIXI_PROJECT_VERSION') else '0.0.0.dev' }}
   is_dev: ${{ env.exists('_CONDA_BUILD_LOCAL') }}
 
 package:
   name: "chlibc"
-  version: ${{ dev_version if is_dev else release_version }}
+  version: ${{ dev_version if is_dev else version }}
 
 source:
   - if: is_dev
@@ -18,7 +18,7 @@ source:
   - if: not is_dev
     then:
       # use the source archive with checksum.txt
-      url: https://github.com/gzm55/chlibc/releases/download/v${{ release_version }}/source.tar.gz
+      url: https://github.com/gzm55/chlibc/releases/download/v${{ version }}/source.tar.gz
       sha256: ${{ release_hash }}
 
 build:

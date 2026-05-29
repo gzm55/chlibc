@@ -28,7 +28,7 @@ echo "Step: Setting release version $RELEASE_VERSION"
 ./pixiw workspace version set "$RELEASE_VERSION"
 
 # bump the release version in conda recipe, but clear the archive hash
-sed -i.bak "s/\(release_version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
+sed -i.bak "s/\(version: \)\"[^\"]*\"/\1\"$RELEASE_VERSION\"/" conda/recipe.yaml
 sed -i.bak "s/\(release_hash: \)\"[^\"]*\"/\1\"\"/" conda/recipe.yaml
 
 git add pixi.toml conda/recipe.yaml

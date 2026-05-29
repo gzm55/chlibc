@@ -1,11 +1,12 @@
 /build/
+*.bak
 
 # pixi environments
 .pixi/*
 !.pixi/config.toml
 
-# Created by https://www.toptal.com/developers/gitignore/api/c,cmake,linux,vim,emacs,macos,ninja
-# Edit at https://www.toptal.com/developers/gitignore?templates=c,cmake,linux,vim,emacs,macos,ninja
+# Created by https://www.toptal.com/developers/gitignore/api/c,vim,cmake,emacs,linux,macos,ninja
+# Edit at https://www.toptal.com/developers/gitignore?templates=c,vim,cmake,emacs,linux,macos,ninja
 
 ### C ###
 # Prerequisites
@@ -202,4 +203,4 @@ tags
 # Persistent undo
 [._]*.un~
 
-# End of https://www.toptal.com/developers/gitignore/api/c,cmake,linux,vim,emacs,macos,ninja
+# End of https://www.toptal.com/developers/gitignore/api/c,vim,cmake,emacs,linux,macos,ninja
