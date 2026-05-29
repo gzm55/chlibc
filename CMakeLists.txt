@@ -180,28 +180,6 @@ install(TARGETS chlibc RUNTIME DESTINATION bin)
 add_executable(dump-args src/dump-args.c)
 target_link_libraries(dump-args PRIVATE ${CMAKE_DL_LIBS})
 
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  # v0 only works on x86_64
-  add_executable(chlibc-v0 src/chlibc-v0.c)
-
-  # disable kernel startup checking
-  add_custom_command(
-    TARGET chlibc-v0
-    POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -R .comment -R .note.ABI-tag "$<TARGET_FILE:chlibc-v0>"
-    COMMENT "Stripping .note.ABI-tag section from $<TARGET_FILE_NAME:chlibc-v0>..."
-    VERBATIM)
-
-  # checking target elf
-  add_custom_command(
-    TARGET chlibc-v0
-    POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E env "READELF_BIN=${CMAKE_READELF}" "${CMAKE_SOURCE_DIR}/elf_release_audit.sh"
-            "$<TARGET_FILE:chlibc>"
-    COMMENT "Checking $<TARGET_FILE_NAME:chlibc>..."
-    VERBATIM)
-endif()
-
 # This simple init target is used for test cases in qemu systems
 add_executable(init src/init.c)
 target_compile_definitions(init PRIVATE _GNU_SOURCE) # enable GNU features
