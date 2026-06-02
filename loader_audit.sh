@@ -16,7 +16,7 @@ log_error() {
   EXIT_STATUS=1
 }
 
-EXEMPT_SECTIONS="\.symtab|\.strtab|\.shstrtab|\.rela\..*|\.rel\..*|\.debug_.*|\.note\.gnu\.property|\.ARM\.attributes"
+EXEMPT_SECTIONS="\.symtab|\.strtab|\.shstrtab|\.rela\..*|\.rel\..*|\.debug_.*|\.note\.gnu\.property|\.ARM\.attributes|\.riscv\.attributes"
 
 for file in "$@"; do
   echo "--- Auditing: $file ---"
@@ -57,6 +57,23 @@ for file in "$@"; do
     log_error "Non-relative relocations detected:"
     log_error "    $BAD_RELOCS"
     FAILED=1
+  fi
+
+  TARGET_ARCH=$("${READELF_BIN}" -h "$file" | sed -n '/Machine:/ s/.*Machine:[[:space:]]*// p')
+  if [ "$TARGET_ARCH" = RISC-V ]; then
+    riscv64-conda-linux-gnu-objdump -d "$file" | awk '
+      $1 ~ /^[0-9a-f]+:/ {
+        instr = $3; ofs = $1; $1=""; $2=""; $3=""; operands = $0;
+        gsub(/[0-9a-f]+ <[^>]+>/, "", operands); # fix offset const operands
+        if (instr ~ /^f(r|s)(csr|rm|flags)$/) {
+          print "❌ found special float instructions: ", ofs, instr, operands;
+          exit 1;
+        }
+        if (operands ~ /(^|[ \t,\(])(ft[0-9]+|fa[0-7]|fs[0-9]+|f[0-9]+|fcsr|frm|fflags)([ \t,\)]|$)/) {
+          print "❌ found float instructions: ", ofs, instr, operands;
+          exit 1;
+        }
+      }' || { EXIT_STATUS=1 && FAILED=1; }
   fi
 
   if [ $FAILED -eq 0 ]; then

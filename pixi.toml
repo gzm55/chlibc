@@ -38,7 +38,8 @@ libc = { family = "glibc", version = "2.17" }
 [feature.gcc-powerpc64le.dependencies]
 cmake = ">=4.2"
 ninja = "*"
-gcc_linux-ppc64le = ">=14" # support C23
+gcc_linux-ppc64le = ">=14"      # support C23
+sysroot_linux-ppc64le = "<2.34"
 [feature.gcc-powerpc64le.tasks]
 _configure-gcc-powerpc64le = "cmake --preset gcc-powerpc64le -S ."
 _build-gcc-powerpc64le-release = "unset LD_RUN_PATH && ./cmake-build --preset gcc-powerpc64le-release"
@@ -53,22 +54,47 @@ features = ["gcc-powerpc64le"]
 no-default-feature = true
 solve-group = "gcc-powerpc64le"
 
+# cross toolchain for gcc-riscv64
+[feature.gcc-riscv64.system-requirements]
+# build on centos7
+linux = "3.10"
+libc = { family = "glibc", version = "2.17" }
+[feature.gcc-riscv64.dependencies]
+cmake = ">=4.2"
+ninja = "*"
+gcc_impl_linux-riscv64 = ">=14"  # support C23
+sysroot_linux-riscv64 = ">=2.34"
+[feature.gcc-riscv64.tasks]
+_configure-gcc-riscv64 = "cmake --preset gcc-riscv64 -S ."
+_build-gcc-riscv64-release = "unset LD_RUN_PATH && ./cmake-build --preset gcc-riscv64-release"
+_build-gcc-riscv64-debug = "./cmake-build --preset gcc-riscv64-debug"
+build-riscv64 = [
+  { task = "_build-gcc-riscv64-release" },
+  { task = "_build-gcc-riscv64-debug" },
+]
+
+[environments.gcc-riscv64]
+features = ["gcc-riscv64"]
+no-default-feature = true
+solve-group = "gcc-riscv64"
+
 [tasks]
 configure = [
   { task = "_configure-clang-x86_64" },
   { task = "_configure-clang-aarch64" },
-  { task = "_configure-gcc-powerpc64le", environment = "gcc-powerpc64le" },
-  { task = "_configure-gcc-x86_64", environment = "gcc-x86-64" },
+  { task = "_configure-gcc-powerpc64le" },
+  { task = "_configure-gcc-riscv64" },
+  { task = "_configure-gcc-x86_64" },
 ]
 build = [
   { task = "build-x86_64" },
   { task = "build-aarch64" },
   { task = "build-powerpc64le" },
+  { task = "build-riscv64" },
 ]
 
 _configure-clang-x86_64 = "cmake --preset clang-x86_64 -S ."
 _configure-clang-aarch64 = "cmake --preset clang-aarch64 -S ."
-_configure-clang-riscv64 = "cmake --preset clang-riscv64 -S ."
 
 build-x86_64 = [
   { task = "_build-clang-x86_64-release" },
@@ -79,17 +105,11 @@ build-aarch64 = [
   { task = "_build-clang-aarch64-release" },
   { task = "_build-clang-aarch64-debug" },
 ]
-build-riscv64 = [
-  { task = "_build-clang-riscv64-release" },
-  { task = "_build-clang-riscv64-debug" },
-]
 
 _build-clang-x86_64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-x86_64-release"
 _build-clang-x86_64-debug = "./cmake-build --preset clang-x86_64-debug"
 _build-clang-aarch64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-aarch64-release"
 _build-clang-aarch64-debug = "./cmake-build --preset clang-aarch64-debug"
-_build-clang-riscv64-release = "unset LD_RUN_PATH && ./cmake-build --preset clang-riscv64-release"
-_build-clang-riscv64-debug = "./cmake-build --preset clang-riscv64-debug"
 
 conda-build = [
   { task = "conda-build-x86_64" },
@@ -126,14 +146,10 @@ compiler-rt_linux-64 = "*"
 compiler-rt_linux-aarch64 = "*"
 lld = "*"
 cmakelang = '*'
-sysroot_linux-64 = "*"
-sysroot_linux-aarch64 = "*"
+sysroot_linux-64 = "<2.34"
+sysroot_linux-aarch64 = "<2.34"
 llvm-tools = "*"
 rattler-build = "*"
-
-## riscv64 target cross building is not supported
-## package compiler-rt_linux-riscv64 is missing
-# sysroot_linux-riscv64 = "*"
 
 lefthook = ">=1.13.1"
 pre-commit-hooks = "*"

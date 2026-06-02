@@ -118,9 +118,9 @@ target_compile_options(
           -fno-plt # not PLT
 )
 # no fp & simd registers
-if(NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "powerpc64le")
+if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
   target_compile_options(chlibc-loader PRIVATE -mgeneral-regs-only)
-else()
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "powerpc64le")
   target_compile_options(chlibc-loader PRIVATE -msoft-float -mno-altivec -mno-vsx)
 endif()
 

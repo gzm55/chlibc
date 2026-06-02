@@ -6,9 +6,14 @@
 #include <elf.h>
 #include <stddef.h>
 #include <sys/syscall.h>
-#include <sys/user.h>
 
 #include "common.h"
+
+#ifdef ARCH_RISCV64
+#  include <asm/ptrace.h>
+#else
+#  include <sys/user.h>
+#endif
 
 #define LOADER_SECTION(type) [[gnu::section(".loader." #type)]]
 

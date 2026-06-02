@@ -73,6 +73,23 @@
 
 #if defined(ARCH_X64)
 __asm__(".symver memcpy, memcpy@GLIBC_2.2.5");
+#elif defined(ARCH_RISCV64)
+static inline int _fstat_syscall(const int fd, struct stat *const statbuf) {
+  return syscall(SYS_newfstatat, fd, "", statbuf, AT_EMPTY_PATH);
+}
+#  define fstat(...) _fstat_syscall(__VA_ARGS__)
+
+long int _strtol_2_27(const char *nptr, char **endptr, int base);
+__asm__(".symver _strtol_2_27, strtol@GLIBC_2.27");
+#  define strtol(...) _strtol_2_27(__VA_ARGS__)
+
+int __libc_start_main_2_27(int *(main)(int, char **, char **), int argc, char **ubp_av, void (*init)(void),
+                           void (*fini)(void), void (*rtld_fini)(void), void(*stack_end));
+__asm__(".symver __libc_start_main_2_27, __libc_start_main@GLIBC_2.27");
+int __libc_start_main(int *(main)(int, char **, char **), int argc, char **ubp_av, void (*init)(void),
+                      void (*fini)(void), void (*rtld_fini)(void), void(*stack_end)) {
+  return __libc_start_main_2_27(main, argc, ubp_av, init, fini, rtld_fini, stack_end);
+}
 #endif
 
 ////////// System Config/Feature ////////////
