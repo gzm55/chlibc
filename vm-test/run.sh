@@ -16,9 +16,6 @@ BASE_DIR=$(dirname -- "$0")
 "$BASE_DIR"/generate-initramfs.sh "${arch}" "$build_dir/initramfs.cpio.gz" "${pixi_env}"
 
 K_ARGS="quiet"
-if [[ $kernel_ver == "2.6.32" ]];then
-  K_ARGS=""
-fi
 
 case "$arch" in
 x86_64)
