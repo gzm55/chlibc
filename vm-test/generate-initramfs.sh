@@ -57,7 +57,12 @@ if [[ $arch != riscv64 ]]; then
     tar xzvf "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" -C "$rootfs_dir" --exclude='*/tls/*' 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
   fi
 else # riscv64
-  ar p "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.deb" data.tar.xz | tar xJf - -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+  ar p "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.deb" data.tar.xz \
+  | if tar --wildcards --version >/dev/null 2>&1; then
+      tar xJf - --wildcards -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+    else
+      tar xJf - -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+    fi
 fi
 
 cp -RPpf "$CONDA_PREFIX/$ARCH_TRIPLE/sysroot/lib64" "$rootfs_dir/sysroot/"
