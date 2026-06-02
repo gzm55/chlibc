@@ -72,7 +72,7 @@ jobs:
       - name: Install QEMU Systems
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: rpm2cpio qemu-system-x86 qemu-system-arm qemu-system-ppc
+          packages: rpm2cpio qemu-system-x86 qemu-system-arm qemu-system-ppc qemu-system-riscv64
           version: 1.0
 
       - name: VM tests
