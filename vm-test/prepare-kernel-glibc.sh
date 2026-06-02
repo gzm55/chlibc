@@ -35,6 +35,25 @@ download_extract_rpm() {
   fi
 }
 
+download_extract_deb() {
+  local dest="${1:?dest}"
+  local url="${2:?url}"
+  local inner_path="${3:?inner_path}"
+  mkdir -p -- "$(dirname -- "$dest")"
+  if [[ -f "$dest" && -s "$dest" ]]; then
+    printf "[SKIP] %s already cached.\n" "$dest"
+    return 0
+  fi
+
+  printf "[DOWNLOAD] extract %s of %s to %s\n" "$inner_path" "$url" "$dest"
+  local tmp_deb
+  tmp_deb=$(mktemp)
+  trap 'rm -f "$tmp_deb"' EXIT
+
+  curl -fsSL --retry 3 -o "$tmp_deb" "$url"
+  ar p "$tmp_deb" data.tar.xz | tar xJOf - "$inner_path" > "$dest"
+}
+
 ### KERNELS
 download "$CACHE_DIR/kernel/x86_64/vmlinuz-2.6.18" 'https://vault.centos.org/5.0/os/x86_64/isolinux/vmlinuz'
 download "$CACHE_DIR/kernel/x86_64/vmlinuz-2.6.32" 'https://vault.centos.org/6.0/os/x86_64/isolinux/vmlinuz'
@@ -43,6 +62,9 @@ download "$CACHE_DIR/kernel/ppc64le/vmlinuz-3.10.0" 'https://vault.centos.org/al
 download_extract_rpm "$CACHE_DIR/kernel/aarch64/vmlinuz-3.19.0" \
 	'https://vault.centos.org/altarch/7.1.1503/os/aarch64/Packages/kernel-3.19.0-0.79.aa7a.aarch64.rpm' \
 	'./boot/vmlinuz-3.19.0-0.79.aa7a.aarch64'
+download_extract_deb "$CACHE_DIR/kernel/riscv64/vmlinuz-5.4.0" \
+	'http://ports.ubuntu.com/ubuntu-ports/pool/main/l/linux-riscv/linux-image-5.4.0-24-generic_5.4.0-24.28_riscv64.deb' \
+	'./boot/vmlinuz-5.4.0-24-generic'
 
 # ppc64 big endian
 # download "$CACHE_DIR/kernel/ppc64/vmlinuz-3.10.0" 'https://vault.centos.org/altarch/7.2.1511/os/ppc64/ppc/ppc64/vmlinuz'
@@ -51,6 +73,7 @@ download_extract_rpm "$CACHE_DIR/kernel/aarch64/vmlinuz-3.19.0" \
 download "$CACHE_DIR/glibc/x86_64/glibc-2.3.4.rpm" 'https://vault.centos.org/4.0/os/x86_64/CentOS/RPMS/glibc-2.3.4-2.x86_64.rpm'
 download "$CACHE_DIR/glibc/aarch64/glibc-2.17.rpm" 'https://vault.centos.org/altarch/7.1.1503/os/aarch64/Packages/glibc-2.17-78.el7.aarch64.rpm'
 download "$CACHE_DIR/glibc/ppc64le/glibc-2.17.rpm" 'https://vault.centos.org/altarch/7.2.1511/os/ppc64le/Packages/glibc-2.17-105.el7.ppc64le.rpm'
+download "$CACHE_DIR/glibc/riscv64/glibc-2.31.deb" 'http://ports.ubuntu.com/ubuntu-ports/pool/main/g/glibc/libc6_2.31-0ubuntu9_riscv64.deb'
 
 # ppc64 big endian
 # download "$CACHE_DIR/glibc/ppc64/glibc-2.17.rpm" 'https://vault.centos.org/altarch/7.2.1511/os/ppc64/Packages/glibc-2.17-105.el7.ppc64.rpm'

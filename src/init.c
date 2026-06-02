@@ -9,6 +9,16 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#ifdef __riscv
+int __libc_start_main_2_27(int *(main)(int, char **, char **), int argc, char **ubp_av, void (*init)(void),
+                           void (*fini)(void), void (*rtld_fini)(void), void(*stack_end));
+__asm__(".symver __libc_start_main_2_27, __libc_start_main@GLIBC_2.27");
+int __libc_start_main(int *(main)(int, char **, char **), int argc, char **ubp_av, void (*init)(void),
+                      void (*fini)(void), void (*rtld_fini)(void), void(*stack_end)) {
+  return __libc_start_main_2_27(main, argc, ubp_av, init, fini, rtld_fini, stack_end);
+}
+#endif
+
 static inline void do_mount(const char *source, const char *target, const char *type) {
   mkdir(target, 0755);
   if (mount(source, target, type, 0, NULL) != 0)

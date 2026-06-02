@@ -20,6 +20,10 @@ aarch64)
   GLIBC_VER=2.17
   ARCH_TRIPLE=aarch64-conda-linux-gnu
   ;;
+riscv64)
+  GLIBC_VER=2.31
+  ARCH_TRIPLE=riscv64-conda-linux-gnu
+  ;;
 esac
 
 CURR_DIR=$(cd -- "$(dirname -- "$0")"; pwd)
@@ -43,16 +47,23 @@ fi
 mkdir -p -- "$rootfs_dir/sysroot"
 mkdir -p -- "$rootfs_dir/bin"
 
-if command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
-  pushd -- "$rootfs_dir" || exit 1
-  rpm2cpio "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" \
-  | cpio -idmv '.*/lib*/ld*.so*' '.*/lib*/libc.so*' '.*/lib*/libc-*.so' 2>/dev/null
-  popd
-else
-  tar xzvf "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" -C "$rootfs_dir" --exclude='*/tls/*' 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+if [[ $arch != riscv64 ]]; then
+  if command -v rpm2cpio >/dev/null 2>&1 && command -v cpio >/dev/null 2>&1; then
+    pushd -- "$rootfs_dir" || exit 1
+    rpm2cpio "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" \
+    | cpio -idmv '.*/lib*/ld*.so*' '.*/lib*/libc.so*' '.*/lib*/libc-*.so' 2>/dev/null
+    popd
+  else
+    tar xzvf "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.rpm" -C "$rootfs_dir" --exclude='*/tls/*' 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+  fi
+else # riscv64
+  ar p "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.deb" data.tar.xz | tar xJf - -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
 fi
 
-cp -rf "$CONDA_PREFIX/$ARCH_TRIPLE/sysroot/lib64" "$rootfs_dir/sysroot/"
+cp -RPpf "$CONDA_PREFIX/$ARCH_TRIPLE/sysroot/lib64" "$rootfs_dir/sysroot/"
+rm -rf "$rootfs_dir/sysroot/lib64/locale"
+rm -rf "$rootfs_dir/sysroot/lib64/gconv"
+find "$rootfs_dir/sysroot/lib64/" -name '*.a' -delete
 
 cp "$rootfs_dir/../bin/init" "$rootfs_dir/"
 cp "$rootfs_dir/../bin/chlibc" "$rootfs_dir/bin/"

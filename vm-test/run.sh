@@ -41,6 +41,12 @@ aarch64)
   CPU=cortex-a53
   QEMU="qemu-system-$arch"
   ;;
+riscv64)
+  MACHINE="virt"
+  K_ARGS+=" console=ttyS0"
+  CPU="rv64"
+  QEMU="qemu-system-$arch"
+  ;;
 *) echo "[ERROR] unsupported arch $arch" ;;
 esac
 
@@ -83,7 +89,7 @@ run_with_timeout_killgroup 30 "$QEMU" \
 
 if grep -qF "FATAL: kernel too old" "$build_dir/vm-test.log"; then
   echo "PASS: old kernel $kernel_ver on $arch"
-elif grep -qF "/sysroot/lib64/libdl.so" "$build_dir/vm-test.log"; then
+elif grep -q "/sysroot/lib64/\(libdl.so\|libc.so.6\)" "$build_dir/vm-test.log"; then
   echo "PASS: kernel $kernel_ver on $arch"
 else
   echo "FAIL: kernel $kernel_ver on $arch" >&2
