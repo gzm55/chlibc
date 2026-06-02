@@ -12,6 +12,7 @@
 #include <sys/auxv.h>
 #include <sys/prctl.h>
 #include <sys/utsname.h>
+#include <termios.h>
 #include <unistd.h>
 
 static const char *get_owner(void *addr, Dl_info *info) {
@@ -251,7 +252,10 @@ int main(int argc, char *argv[]) {
   }
 
   fflush(stderr);
+  tcdrain(STDERR_FILENO);
+
   fflush(stdout);
+  tcdrain(STDOUT_FILENO);
 
   return 0;
 }
