@@ -2,8 +2,9 @@
 c_compiler:
   - clang  # [x86_64 or aarch64]
   - gcc  # [ppc64le]
+  - gcc_impl  # [riscv64]
 c_compiler_version:
   - ">=18"  # [x86_64 or aarch64]
-  - ">=14"  # [ppc64le]
+  - ">=14"  # [ppc64le or riscv64]
 c_stdlib:
   - sysroot

@@ -10,7 +10,7 @@ on:
 
 env:
   # Format: <conda-arch>:<build-dir>
-  ARCH_MAP: "x86_64:build/clang-x86_64 aarch64:build/clang-aarch64 ppc64le:build/gcc-powerpc64le"
+  ARCH_MAP: "x86_64:build/clang-x86_64 aarch64:build/clang-aarch64 ppc64le:build/gcc-powerpc64le riscv64:build/gcc-riscv64"
 
 jobs:
   build:

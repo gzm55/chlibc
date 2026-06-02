@@ -22,7 +22,7 @@ source:
       sha256: ${{ release_hash }}
 
 build:
-  skip: ${{ target_platform not in ["linux-64", "linux-aarch64", "linux-ppc64le"] }}
+  skip: ${{ target_platform not in ["linux-64", "linux-aarch64", "linux-ppc64le", "linux-riscv64"] }}
   number: 0
   dynamic_linking:
     binary_relocation: false
@@ -32,6 +32,12 @@ build:
       {% if target_platform in ["linux-64", "linux-aarch64"] %}
       unset CFLAGS
       unset LDFLAGS
+      {% endif %}
+
+      {% if target_platform == "linux-riscv64" %}
+      export HOST=riscv64-conda-linux-gnu
+      export CC=riscv64-conda-linux-gnu-cc
+      export CMAKE_ARGS="-DCMAKE_BUILD_TYPE=Release -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY -DCMAKE_FIND_ROOT_PATH=$PREFIX;$BUILD_PREFIX/riscv64-conda-linux-gnu/sysroot -DCMAKE_INSTALL_PREFIX=$PREFIX -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=riscv64"
       {% endif %}
 
       unset LD_RUN_PATH
@@ -87,6 +93,7 @@ tests:
             linux-64)      NATIVE_ARCH="x86_64" ;;
             linux-aarch64) NATIVE_ARCH="aarch64" ;;
             linux-ppc64le) NATIVE_ARCH="ppc64le" ;;
+            linux-riscv64) NATIVE_ARCH="riscv64" ;;
             *)             NATIVE_ARCH="unknown" ;;
           esac
         - EXPECTED_HASH=$(grep "chlibc-$NATIVE_ARCH" checksum.txt | awk '{print $1}')
