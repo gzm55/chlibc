@@ -38,7 +38,8 @@ git commit -m "chore: release v$RELEASE_VERSION"
 rm -rf build
 ./pixiw run build
 
-ARCH_MAP="x86_64:build/clang-x86_64 aarch64:build/clang-aarch64 ppc64le:build/gcc-powerpc64le"
+# Format: <conda-arch>:<build-dir>
+ARCH_MAP="x86_64:build/clang-x86_64 aarch64:build/clang-aarch64 ppc64le:build/gcc-powerpc64le riscv64:build/gcc-riscv64"
 CHECKSUMS_TEXT=""
 
 for cfg in $ARCH_MAP; do
