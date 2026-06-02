@@ -59,7 +59,7 @@ if [[ $arch != riscv64 ]]; then
 else # riscv64
   ar p "$CACHE_DIR/glibc/$arch/glibc-$GLIBC_VER.deb" data.tar.xz \
   | if tar --wildcards --version >/dev/null 2>&1; then
-      tar xJf - --wildcards -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
+      tar xJf - --wildcards -C "$rootfs_dir" '*/lib*/ld*.so*' '*/lib*/libc.so*' '*/lib*/libc-*.so'
     else
       tar xJf - -C "$rootfs_dir" 'lib*/ld*.so*' 'lib*/libc.so*' 'lib*/libc-*.so'
     fi
