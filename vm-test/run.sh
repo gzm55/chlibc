@@ -16,6 +16,7 @@ BASE_DIR=$(dirname -- "$0")
 "$BASE_DIR"/generate-initramfs.sh "${arch}" "$build_dir/initramfs.cpio.gz" "${pixi_env}"
 
 K_ARGS="quiet"
+TIMEOUT=30
 
 case "$arch" in
 x86_64)
@@ -24,6 +25,8 @@ x86_64)
   if [[ $kernel_ver == "2.6.18" ]];then
     MACHINE+=",acpi=off"
     K_ARGS+=" noapic"
+  elif [[ $kernel_ver == "2.6.32" ]];then
+    TIMEOUT=60
   fi
   CPU=Penryn
   QEMU="qemu-system-$arch"
@@ -76,7 +79,7 @@ run_with_timeout_killgroup() {
   kill -9 "-$killer_pid" 2>/dev/null
 }
 
-run_with_timeout_killgroup 30 "$QEMU" \
+run_with_timeout_killgroup $TIMEOUT "$QEMU" \
   -machine "$MACHINE" \
   -cpu "$CPU" \
   -m 512m \

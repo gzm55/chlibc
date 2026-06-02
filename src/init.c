@@ -86,11 +86,7 @@ int main(const int argc, char *const argv[]) {
   fflush(stdout);
   sync();
 
-#ifdef __x86_64__
-  sleep(3);
-#else
   sleep(1);
-#endif
 
   reboot(LINUX_REBOOT_CMD_RESTART);  // reboot and '-no-reboot' option to poweroff the VM
 
