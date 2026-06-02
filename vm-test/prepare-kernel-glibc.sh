@@ -46,9 +46,7 @@ download_extract_deb() {
   fi
 
   printf "[DOWNLOAD] extract %s of %s to %s\n" "$inner_path" "$url" "$dest"
-  local tmp_deb
-  tmp_deb=$(mktemp)
-  trap 'rm -f "$tmp_deb"' EXIT
+  local tmp_deb="${dest}.deb"
 
   curl -fsSL --retry 3 -o "$tmp_deb" "$url"
   ar p "$tmp_deb" data.tar.xz | tar xJOf - "$inner_path" > "$dest"
