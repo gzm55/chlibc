@@ -3,7 +3,7 @@ schema_version: 1
 
 context:
   version: "0.1.7"
-  release_hash: ""
+  release_hash: "f24ff5f949f2451b35ebca4536745202c79dc36c1614cbf23c4cd579b383fb29"
   dev_version: ${{ env.get('PIXI_PROJECT_VERSION') if env.exists('PIXI_PROJECT_VERSION') else '0.0.0.dev' }}
   is_dev: ${{ env.exists('_CONDA_BUILD_LOCAL') }}
 
