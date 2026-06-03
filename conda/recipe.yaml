@@ -15,8 +15,7 @@ source:
   - if: is_dev
     then:
       path: ..
-  - if: not is_dev
-    then:
+    else:
       # use the source archive with checksum.txt
       url: https://github.com/gzm55/chlibc/releases/download/v${{ version }}/source.tar.gz
       sha256: ${{ release_hash }}
@@ -56,13 +55,11 @@ requirements:
     - ninja
 
     - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: compiler-rt_${{ target_platform }}
-    - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: lld
-    - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: llvm-tools
-    - if: target_platform in ["linux-64", "linux-aarch64"]
-      then: clang-tools
+      then:
+        - compiler-rt_${{ target_platform }}
+        - lld
+        - llvm-tools
+        - clang-tools
   host:
   run:
     - __glibc
