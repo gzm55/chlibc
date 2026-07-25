@@ -1937,7 +1937,7 @@ static handle_trap_result_t handle_trap(const pid_t pid) {
     siginfo_t si = {.si_signo = SIGTRAP};
     PT_OK_CALL(pt_get(pid, &si), return HTRAP_FATAL);
     if (si.si_code == TRAP_BRKPT) {
-#  ifdef RISCV64
+#  ifdef ARCH_RISCV64
       if ((v & 0x3) == 0x3)
         regs._M_PC += TRAP_OP_NEXT;  // for riscv64 full 4 bytes instruction
 #  endif
