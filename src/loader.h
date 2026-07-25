@@ -202,7 +202,8 @@ typedef struct {
   const Elf64_auxv_t *auxv;
   union {
     char *lib_paths;  // string of LD_LIBRARY_PATH
-    const void *end;
+    const void *end;  // parameter block end — shares relo offset with lib_paths;
+                      // MUST be read via RELO_PTR before writing lib_paths
   };
 } loader_relo_types;
 static_assert(sizeof(loader_relo_types) % sizeof(void *) == 0);

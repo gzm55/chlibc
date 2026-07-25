@@ -173,21 +173,26 @@ static int _log_fd() {
   // from env
   auto const env_path = getenv("CHLIBC_LOGGER_FILE");
   if (env_path && 0 != *env_path) {
-    fd = open(env_path, O_WRONLY | O_APPEND | O_CREAT | O_NOCTTY | g_sc.o_cloexec | O_NOFOLLOW | O_NONBLOCK, 0644);
-    OPENFD_CLOEXEC(fd);
-    if (_log_fd_ok(fd))
+    int result =
+        open(env_path, O_WRONLY | O_APPEND | O_CREAT | O_NOCTTY | g_sc.o_cloexec | O_NOFOLLOW | O_NONBLOCK, 0644);
+    OPENFD_CLOEXEC(result);
+    if (_log_fd_ok(result)) {
+      fd = result;
       return fd;
-    close(fd);
+    }
+    close(result);
   }
 
   // from stderr
   if (isatty(STDERR_FILENO)) {
-    fd = fcntl(STDERR_FILENO, g_sc.f_dupfd_cloexec, 3);
-    DUPFD_CLOEXEC(fd);
-    auto const flags = fcntl(fd, F_GETFL, 0);
-    if (fd >= 3 && flags != -1 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) != -1 && _log_fd_ok(fd))
+    int result = fcntl(STDERR_FILENO, g_sc.f_dupfd_cloexec, 3);
+    DUPFD_CLOEXEC(result);
+    auto const flags = fcntl(result, F_GETFL, 0);
+    if (result >= 3 && flags != -1 && fcntl(result, F_SETFL, flags | O_NONBLOCK) != -1 && _log_fd_ok(result)) {
+      fd = result;
       return fd;
-    close(fd);
+    }
+    close(result);
   }
 
 #define FAIL_MSG "_log_fd() cannot find a valid fd"
