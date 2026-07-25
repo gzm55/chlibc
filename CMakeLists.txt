@@ -49,7 +49,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang") # also matches AppleClang
 elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU") # gcc
   add_compile_options(-Wlogical-op -Wstringop-truncation -Wformat-security -Wstringop-overflow=4 -fanalyzer)
 else()
-  message(FATAL_ERROR, "Unsupported compiler: ${CMAKE_C_COMPILER_ID}.")
+  message(FATAL_ERROR "Unsupported compiler: ${CMAKE_C_COMPILER_ID}.")
 endif()
 
 # visibility

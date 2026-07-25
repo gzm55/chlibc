@@ -35,6 +35,7 @@
 #  define PROJECT_VERSION_STR "dev"
 #endif
 
+#include <assert.h>
 #include <elf.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -530,6 +531,13 @@ static void setup_sentinel_if_need_or_die() {
 }
 
 static void setup_signal_handlers_or_die() {
+  // process_signals() relies on the invariant that signal_or_bits entries
+  // for SIGCONT/SIGTSTP/SIGTTIN/SIGTTOU all contain the SIGSTOP bit,
+  // preventing __builtin_ctz(0) at line 1492.
+  assert(signal_or_bits[SIGCONT] & _SIGBIT1(SIGSTOP));
+  assert(signal_or_bits[SIGTSTP] & _SIGBIT1(SIGSTOP));
+  assert(signal_or_bits[SIGTTIN] & _SIGBIT1(SIGSTOP));
+  assert(signal_or_bits[SIGTTOU] & _SIGBIT1(SIGSTOP));
   auto const die_fd = _log_fd();  // init log fd
   auto const die_sig = sigsetjmp(sig_jump_env, 1);
   if (die_sig) {
