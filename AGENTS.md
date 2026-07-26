@@ -107,7 +107,7 @@ Ordered by priority. All verified during 2025-07 code audit.
 
 | # | File:Line | Description |
 |---|-----------|-------------|
-| L1 | `chlibc.c:1518` | `now_ns()` ignores `clock_gettime` syscall return; `ts` uninitialized on failure |
+| L1 | `chlibc.c:1518` | `now_ns()` ignores `clock_gettime` syscall return; `ts` uninitialized on failure | ✅ Fixed (90bae4d) |
 | L2 | `chlibc.c:1847-1848` | riscv64 accesses `regs.s10`/`regs.s11` directly instead of through `_M_S*` macros (works but inconsistent) |
 | L3 | `loader-powerpc64le.c` | `loader_loader()` / `loader()` use raw file-scope `__asm__()` instead of `[[gnu::naked]]` functions (no `[[noreturn]]`) |
 | L4 | `loader.h:214` | `LOADER_PARAM_CHLIBC_PATH_OFS_FROM_ARGC` narrows through `int32_t` — truncates if param block ever >2GiB |
