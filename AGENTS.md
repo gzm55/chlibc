@@ -95,7 +95,7 @@ Ordered by priority. All verified during 2025-07 code audit.
 | # | File:Line | Description |
 |---|-----------|-------------|
 | M1 | `chlibc.c:2244-2246` | SIGKILL promotion in `ptrace_exiting()` passes original `signals` instead of new SIGKILL to `min_exit_signal()` — exit code may be wrong (128 instead of 128+SIGKILL) |
-| M2 | `chlibc.c:1563` | `parse_exec_arg()` hardcodes `(1 << 21)` for `PT_READ_BULKS` without accounting for remaining `g_buffer` space |
+| M2 | `chlibc.c:1563` | `parse_exec_arg()` hardcodes `(1 << 21)` for `PT_READ_BULKS` without accounting for remaining `g_buffer` space | ✅ Fixed (6a2623f) |
 | M3 | `loader.c:67-68` | `__ASSUME(n > 0)` / `__ASSUME(s-d > 16)` in `_tlc_memmove16` — UB if count=0 or gap ≤16. Currently safe for sole call site, but no guard if reused | WONTFIX — documented constraint; sole caller guarantees invariants |
 | M4 | `CMakeLists.txt:35` | `CMAKE_C_EXTENSIONS OFF` contradicts `target_compile_definitions(PRIVATE _GNU_SOURCE)` | WONTFIX — orthogonal concerns (compiler dialect vs libc macros) |
 | M5 | `release.sh:53-55` | `archive.sh - checksum.txt` passes `-` as commit hash; likely fails `git describe --tags -- -` | WONTFIX — archive.sh intentionally handles `-` as HEAD+--tags |
