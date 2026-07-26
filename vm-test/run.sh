@@ -50,7 +50,7 @@ riscv64)
   CPU="rv64"
   QEMU="qemu-system-$arch"
   ;;
-*) echo "[ERROR] unsupported arch $arch" ;;
+*) echo "[ERROR] unsupported arch $arch"; exit 1 ;;
 esac
 
 if ! command -v "$QEMU"; then
