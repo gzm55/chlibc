@@ -101,7 +101,7 @@ Ordered by priority. All verified during 2025-07 code audit.
 | M5 | `release.sh:53-55` | `archive.sh - checksum.txt` passes `-` as commit hash; likely fails `git describe --tags -- -` |
 | M6 | `release.sh:48` | `sha256sum` (GNU coreutils) not declared in `pixi.toml` deps; missing on macOS |
 | M7 | `CMakePresets.json` | Missing `gcc-x86_64-debug` build preset (all other archs have debug variants) |
-| M8 | `vm-test/run.sh:53` | `echo` error under `set -e` not followed by `exit 1`; falls through to confusing later failure |
+| M8 | `vm-test/run.sh:53` | `echo` error under `set -e` not followed by `exit 1`; falls through to confusing later failure | ✅ Fixed (2e83374) |
 
 ### LOW
 
