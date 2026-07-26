@@ -825,6 +825,7 @@ static bool init_sys_config_ptrace(const pid_t pid, bool exitkill) {
 // The pointer and the size must be align to the system pagesize.
 // Automatically unmapped when the tracer is terminated.
 static int8_t *g_buffer;
+static size_t g_arg_max = 1 << 21;
 #if LOADER_LOADER_SP > 0
 static uint64_t (*g_loader_loader_param)[LOADER_LOADER_SP / sizeof(uint64_t)];
 #else
@@ -835,6 +836,7 @@ static uint32_t g_loader_param_written;
 static size_t calc_g_buffer_sz(size_t);
 static bool alloc_g_buffer() {
   auto const arg_max = _OK_CALL(sysconf(_SC_ARG_MAX), _POSIX_ARG_MAX <= _ && _ <= INT64_C(4194304), return false);
+  g_arg_max = (size_t)arg_max;
   auto const aligned_size = align_page_u(calc_g_buffer_sz(arg_max));  // align up to page size
   if (UNLIKELY(aligned_size >= (UINT64_C(1) << 32)))
     return false;  // less then 4G
@@ -1568,7 +1570,7 @@ static bool parse_exec_arg(const pid_t pid, const uint64_t rsp, const uint64_t r
 
   // envp[]
   exec_arg->envp_ofs = ofs;
-  ofs += PT_READ_BULKS(pid, rsp + ofs, 1, g_buffer + ofs, (1 << 21), true, _ == 0, true, return false);
+  ofs += PT_READ_BULKS(pid, rsp + ofs, 1, g_buffer + ofs, g_arg_max, true, _ == 0, true, return false);
   *(uint64_t *)(g_buffer + ofs) = 0;  // append NULL after envp
   ofs += sizeof(uint64_t);
 
