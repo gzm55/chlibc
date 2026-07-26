@@ -59,6 +59,8 @@ static inline void *_tlc_memmove16(void *dest, const void *src, size_t count) {
 #ifdef ARCH_X64
   __asm__ volatile("rep movsb" : "+D"(dest), "+S"(src), "+c"(count) : : "memory", "cc");  // ERMS
 #else
+  // Caller must ensure count > 0 and src-dest gap > 16. Sole caller is
+  // loader_fix_stack where alloc_sz >= sizeof(loader_param_t) + constants.
   auto const d = (uint128_t *)__builtin_assume_aligned(dest, 16);
   auto const s = (const uint128_t *)__builtin_assume_aligned(src, 16);
   auto const n = align_u(count, alignof(uint128_t)) / sizeof(uint128_t);  // extend to full 16 bytes

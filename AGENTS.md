@@ -96,11 +96,11 @@ Ordered by priority. All verified during 2025-07 code audit.
 |---|-----------|-------------|
 | M1 | `chlibc.c:2244-2246` | SIGKILL promotion in `ptrace_exiting()` passes original `signals` instead of new SIGKILL to `min_exit_signal()` — exit code may be wrong (128 instead of 128+SIGKILL) |
 | M2 | `chlibc.c:1563` | `parse_exec_arg()` hardcodes `(1 << 21)` for `PT_READ_BULKS` without accounting for remaining `g_buffer` space |
-| M3 | `loader.c:67-68` | `__ASSUME(n > 0)` / `__ASSUME(s-d > 16)` in `_tlc_memmove16` — UB if count=0 or gap ≤16. Currently safe for sole call site, but no guard if reused |
-| M4 | `CMakeLists.txt:35` | `CMAKE_C_EXTENSIONS OFF` contradicts `target_compile_definitions(PRIVATE _GNU_SOURCE)` |
-| M5 | `release.sh:53-55` | `archive.sh - checksum.txt` passes `-` as commit hash; likely fails `git describe --tags -- -` |
-| M6 | `release.sh:48` | `sha256sum` (GNU coreutils) not declared in `pixi.toml` deps; missing on macOS |
-| M7 | `CMakePresets.json` | Missing `gcc-x86_64-debug` build preset (all other archs have debug variants) |
+| M3 | `loader.c:67-68` | `__ASSUME(n > 0)` / `__ASSUME(s-d > 16)` in `_tlc_memmove16` — UB if count=0 or gap ≤16. Currently safe for sole call site, but no guard if reused | WONTFIX — documented constraint; sole caller guarantees invariants |
+| M4 | `CMakeLists.txt:35` | `CMAKE_C_EXTENSIONS OFF` contradicts `target_compile_definitions(PRIVATE _GNU_SOURCE)` | WONTFIX — orthogonal concerns (compiler dialect vs libc macros) |
+| M5 | `release.sh:53-55` | `archive.sh - checksum.txt` passes `-` as commit hash; likely fails `git describe --tags -- -` | WONTFIX — archive.sh intentionally handles `-` as HEAD+--tags |
+| M6 | `release.sh:48` | `sha256sum` (GNU coreutils) not declared in `pixi.toml` deps; missing on macOS | WONTFIX — macOS /sbin/sha256sum available |
+| M7 | `CMakePresets.json` | Missing `gcc-x86_64-debug` build preset (all other archs have debug variants) | WONTFIX — intentionally omitted to limit build matrix |
 | M8 | `vm-test/run.sh:53` | `echo` error under `set -e` not followed by `exit 1`; falls through to confusing later failure | ✅ Fixed (2e83374) |
 
 ### LOW
