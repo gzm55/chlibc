@@ -1522,7 +1522,7 @@ static uint_fast32_t process_signals() {
 }
 
 static inline uint64_t now_ns() {
-  struct timespec ts;
+  struct timespec ts = {};
   syscall(SYS_clock_gettime, CLOCK_MONOTONIC, &ts);  // only used in exiting stage, syscall is accecptable
   return (uint64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
