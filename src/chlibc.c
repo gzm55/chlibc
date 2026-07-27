@@ -2251,9 +2251,10 @@ static int ptrace_exiting(const uint_fast32_t signals) {
 
   // decent exiting loop
   while ((curr = now_ns()) < softline) {
-    if (atomic_exchange_explicit(&pending_signal, 0, memory_order_relaxed) & _SIGBIT1(SIGKILL)) {
+    auto const fresh_sigs = atomic_exchange_explicit(&pending_signal, 0, memory_order_relaxed);
+    if (fresh_sigs & _SIGBIT1(SIGKILL)) {
       // promote term to kill
-      sig = min_exit_signal(signals, true);
+      sig = min_exit_signal(signals | fresh_sigs, true);
 #ifdef ARCH_X64
       if (g_sc.has_ptrace_exitkill)
         return 128 + sig;
