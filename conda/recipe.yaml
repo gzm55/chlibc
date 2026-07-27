@@ -54,16 +54,16 @@ requirements:
     - cmake >=4.2
     - ninja
 
-    - if: target_platform == "linux-ppc64le" and build_platform == "linux-64"
+    - if: target_platform == "linux-ppc64le"
       then:
-        - gcc_linux-ppc64le ==15.2.0 h9073fe5_25
+        - gcc_linux-ppc64le ==15.2.0
         - binutils_linux-ppc64le ==2.45.1
         - binutils_impl_linux-ppc64le ==2.45.1
-    - if: target_platform == "linux-ppc64le" and build_platform == "osx-arm64"
+
+    - if: target_platform == "linux-riscv64"
       then:
-        - gcc_linux-ppc64le ==15.2.0 h4d1f5cb_25
-        - binutils_linux-ppc64le ==2.45.1
-        - binutils_impl_linux-ppc64le ==2.45.1
+        - gcc_impl_linux-riscv64 ==15.2.0
+        - binutils_impl_linux-riscv64 ==2.45.1
 
     - if: target_platform in ["linux-64", "linux-aarch64"]
       then:
