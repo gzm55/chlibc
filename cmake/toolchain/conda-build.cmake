@@ -21,9 +21,11 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
   message(FATAL_ERROR "Require CMAKE_SYSTEM_NAME=Linux, unsupported operating system: '${CMAKE_SYSTEM_NAME}'.")
 endif()
 
-# Compiler target and sysroot
+# Compiler target and sysroot Default to target arch from HOST triple (e.g. powerpc64le-conda-linux-gnu -> powerpc64le)
+# when CMAKE_SYSTEM_PROCESSOR not explicitly set via CMAKE_ARGS.
+string(REGEX REPLACE "^([^-]+).*" "\\1" _default_arch "$ENV{HOST}")
 set(CMAKE_SYSTEM_PROCESSOR
-    "${CMAKE_HOST_SYSTEM_PROCESSOR}"
+    "${_default_arch}"
     CACHE STRING "Target CPU Name")
 set(CMAKE_C_COMPILER_TARGET "$ENV{HOST}")
 set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
