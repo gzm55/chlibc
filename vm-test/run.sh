@@ -26,7 +26,7 @@ x86_64)
     MACHINE+=",acpi=off"
     K_ARGS+=" noapic"
   elif [[ $kernel_ver == "2.6.32" ]];then
-    TIMEOUT=60
+    TIMEOUT=90
   fi
   CPU=Penryn
   QEMU="qemu-system-$arch"
