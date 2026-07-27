@@ -6,7 +6,7 @@ COMPILER="$1"
 BUILD_DIR="$2"
 PATTERN='%{!static:-rpath [^}]*}'
 
-SPECS_PATH=$("$COMPILER" -v 2>&1 | grep "Reading specs from" | awk '{print $4}')
+SPECS_PATH=$("$COMPILER" -v 2>&1 | sed -n 's/^Reading specs from //p')
 [ -n "$SPECS_PATH" ] && [ -f "$SPECS_PATH" ] || exit 0
 grep -qE "$PATTERN" "$SPECS_PATH" || exit 0
 
