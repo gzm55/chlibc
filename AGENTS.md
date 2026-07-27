@@ -88,7 +88,7 @@ Ordered by priority. All verified during 2025-07 code audit.
 |---|-----------|-------------|
 | H1 | `conda-build.cmake:30-32` | ppc64le remap: `if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")` never fires in cross-compile (value comes from `CMAKE_HOST_SYSTEM_PROCESSOR`) |
 | H2 | `patch_gcc_specs.sh:9-16` | `SPECS_PATH` parsed from `gcc -v` never quoted; breaks on paths with spaces | ✅ Fixed (688b2d3) |
-| H3 | `vm-test/run.sh:61-80` | Timeout killer process not cleaned up when QEMU exits before timeout; orphan processes leak |
+| H3 | `vm-test/run.sh:61-80` | Timeout killer process not cleaned up when QEMU exits before timeout; orphan processes leak | ✅ Fixed (d7cb66e) |
 
 ### MEDIUM
 
