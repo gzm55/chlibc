@@ -75,8 +75,8 @@ run_with_timeout_killgroup() {
   local killer_pid=$!
   set +m
 
-  wait "$qemu_pid" 2>/dev/null
-  kill -9 "-$killer_pid" 2>/dev/null
+  wait "$qemu_pid" 2>/dev/null || true
+  kill -9 "-$killer_pid" 2>/dev/null || true
 }
 
 run_with_timeout_killgroup $TIMEOUT "$QEMU" \
