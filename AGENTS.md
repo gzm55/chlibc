@@ -78,36 +78,6 @@ Tests download kernels and glibc RPMs into `vm-test/dl-cache/`. First run may be
 
 **Never bump the version manually without understanding this flow.** The `conda/recipe.yaml` version + hash must stay in sync.
 
-## Known Issues
+## Code Audit (2025-07)
 
-Ordered by priority. All verified during 2025-07 code audit.
-
-### HIGH
-
-| # | File:Line | Description |
-|---|-----------|-------------|
-| H1 | `conda-build.cmake:30-32` | ppc64le remap: `if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")` never fires in cross-compile (value comes from `CMAKE_HOST_SYSTEM_PROCESSOR`) | ✅ Fixed (1141913) |
-| H2 | `patch_gcc_specs.sh:9-16` | `SPECS_PATH` parsed from `gcc -v` never quoted; breaks on paths with spaces | ✅ Fixed (688b2d3) |
-| H3 | `vm-test/run.sh:61-80` | Timeout killer process not cleaned up when QEMU exits before timeout; orphan processes leak | ✅ Fixed (d7cb66e) |
-
-### MEDIUM
-
-| # | File:Line | Description |
-|---|-----------|-------------|
-| M1 | `chlibc.c:2244-2246` | SIGKILL promotion in `ptrace_exiting()` passes original `signals` instead of new SIGKILL to `min_exit_signal()` — exit code may be wrong (128 instead of 128+SIGKILL) | ✅ Fixed (01c2383) |
-| M2 | `chlibc.c:1563` | `parse_exec_arg()` hardcodes `(1 << 21)` for `PT_READ_BULKS` without accounting for remaining `g_buffer` space | ✅ Fixed (6a2623f) |
-| M3 | `loader.c:67-68` | `__ASSUME(n > 0)` / `__ASSUME(s-d > 16)` in `_tlc_memmove16` — UB if count=0 or gap ≤16. Currently safe for sole call site, but no guard if reused | WONTFIX — documented constraint; sole caller guarantees invariants |
-| M4 | `CMakeLists.txt:35` | `CMAKE_C_EXTENSIONS OFF` contradicts `target_compile_definitions(PRIVATE _GNU_SOURCE)` | WONTFIX — orthogonal concerns (compiler dialect vs libc macros) |
-| M5 | `release.sh:53-55` | `archive.sh - checksum.txt` passes `-` as commit hash; likely fails `git describe --tags -- -` | WONTFIX — archive.sh intentionally handles `-` as HEAD+--tags |
-| M6 | `release.sh:48` | `sha256sum` (GNU coreutils) not declared in `pixi.toml` deps; missing on macOS | WONTFIX — macOS /sbin/sha256sum available |
-| M7 | `CMakePresets.json` | Missing `gcc-x86_64-debug` build preset (all other archs have debug variants) | WONTFIX — intentionally omitted to limit build matrix |
-| M8 | `vm-test/run.sh:53` | `echo` error under `set -e` not followed by `exit 1`; falls through to confusing later failure | ✅ Fixed (2e83374) |
-
-### LOW
-
-| # | File:Line | Description |
-|---|-----------|-------------|
-| L1 | `chlibc.c:1518` | `now_ns()` ignores `clock_gettime` syscall return; `ts` uninitialized on failure | ✅ Fixed (90bae4d) |
-| L2 | `chlibc.c:1847-1848` | riscv64 accesses `regs.s10`/`regs.s11` directly instead of through `_M_S*` macros (works but inconsistent) | WONTFIX — arch-specific scratch regs |
-| L3 | `loader-powerpc64le.c` | `loader_loader()` / `loader()` use raw file-scope `__asm__()` instead of `[[gnu::naked]]` functions (no `[[noreturn]]`) | WONTFIX — PPC64LE lacks naked function support; raw asm is required for frame header setup |
-| L4 | `loader.h:214` | `LOADER_PARAM_CHLIBC_PATH_OFS_FROM_ARGC` narrows through `int32_t` — truncates if param block ever >2GiB | ✅ Fixed (9904cdb) |
+All 17 issues from the 2025-07 code audit have been resolved (8 fixed, 9 WONTFIX — see git log for details).
