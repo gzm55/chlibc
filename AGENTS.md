@@ -81,3 +81,9 @@ Tests download kernels and glibc RPMs into `vm-test/dl-cache/`. First run may be
 ## Code Audit (2025-07)
 
 All 17 issues from the 2025-07 code audit have been resolved (8 fixed, 9 WONTFIX — see git log for details).
+
+### Unresolved
+| # | File:Line | Description |
+|---|-----------|-------------|
+| H1 | `conda-build.cmake:25-32` | `CMAKE_SYSTEM_PROCESSOR` default from `CMAKE_HOST_SYSTEM_PROCESSOR` is wrong for cross-compile. Fix attempted (
+1141913) but reverted — changing it broke ppc64le reproducibility. Needs investigation into CMake arch-detection interaction. |
