@@ -332,7 +332,7 @@ stack_move_info_t loader_main(loader_param_t *const param, const uint64_t dyn_to
   // unmap old interp
   auto const munmap_params_end = RELO_PTR(param, munmap_params_end);
   for (auto un = RELO_PTR(param, munmap_params); un < munmap_params_end; ++un)
-    _tlc_munmap(old_base + un->vaddr, un->length);  // ignore mnumap errors
+    _tlc_munmap(old_base + un->vaddr, un->length);  // ignore munmap errors
 
   // prepare new interp
   const loader_sys_conf_t sys_conf = {
