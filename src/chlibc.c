@@ -708,9 +708,9 @@ static void pids_kill_all(const int sig) {
       if (-1 == kill(child, sig)) {  // use kill to support centos 5 or 6
         switch (errno) {
         case ESRCH:
-          slot->bits &= ~_SIGBIT1(ctz);  // remove non existing child quickly
         case EPERM:
-          break;  // ignore permission error
+          slot->bits &= ~_SIGBIT1(ctz);  // remove non existing child quickly
+          break;                         // ignore permission error
         default:
           FATAL(128 + sig, "BUG");  // bug if EINVAL or other unknown errors
         }
@@ -746,9 +746,9 @@ static void pids_kill_tracee0(const int sig) {
   if (-1 == kill(tracee0, sig)) {
     switch (errno) {
     case ESRCH:
-      pids->bits &= ~_SIGBIT1(0);  // tracee0 is on slot 0 bit 0
     case EPERM:
-      break;  // ignore permission error
+      pids->bits &= ~_SIGBIT1(0);  // tracee0 is on slot 0 bit 0
+      break;                       // ignore permission error
     default:
       FATAL(128 + sig, "BUG");  // bug if EINVAL or other unknown errors
     }
