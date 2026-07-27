@@ -989,7 +989,7 @@ static bool init_elf_info(const char *const path, const char *const libc_dir, el
   else
     info->libc_dir[0] = '\0';
 
-  auto fd = _OK_CALL(open(info->path, O_RDONLY | O_NOCTTY | O_NOFOLLOW), _ >= 0, goto DONE);
+  auto fd = _OK_CALL(open(info->path, O_RDONLY | O_NOCTTY | O_NOFOLLOW | g_sc.o_cloexec), _ >= 0, goto DONE);
   struct stat st;
 
   _OK_CALL(fstat(fd, &st), _ >= 0, goto CLEAN_FD_DONE);
