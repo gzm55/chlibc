@@ -193,14 +193,16 @@ static const union {
   uint128_t d128;
 } LD_DIR_KEY = {.cstr = "LD_LIBRARY_PATH="};
 static_assert(sizeof(LD_DIR_KEY.cstr) == LD_DIR_KEY_LEN + 1);
-typedef uint128_t unaligned_uint128_t [[gnu::aligned(STACK_ALIGNAS)]];
+typedef uint128_t unaligned_uint128_t [[gnu::aligned(1)]];
 
 LOADER_SECTION(text)
 static inline bool is_ld_dir_env(const char *const p) {
+#if defined(ARCH_X64) || defined(ARCH_ARM64)
   if (LIKELY(align_u_dist(p, 0x1000) >= 16)) {
     auto const p128 = (const unaligned_uint128_t *)p;
     return *p128 == LD_DIR_KEY.d128;
   }
+#endif
   return UNLIKELY(_tlc_strncmp(p, LD_DIR_KEY.cstr, LD_DIR_KEY_LEN) == 0);
 }
 
