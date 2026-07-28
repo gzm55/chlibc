@@ -86,7 +86,12 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux"
    AND CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64"
    AND CMAKE_C_COMPILER_ID MATCHES "Clang")
   # On linux64, the default clang cfg (${CMAKE_C_COMPILER_TARGET}-clang.cfg) always insert -rpath and -rpath-link flags
-  add_link_options(--config "$ENV{CONDA_PREFIX}/bin/${CMAKE_C_COMPILER_TARGET}.cfg")
+  set(CLANG_CONFIG_FILE "$ENV{CONDA_PREFIX}/bin/${CMAKE_C_COMPILER_TARGET}.cfg")
+  if(NOT EXISTS "${CLANG_CONFIG_FILE}")
+    message(FATAL_ERROR "Clang config file not found: ${CLANG_CONFIG_FILE}"
+                        ". CONDA_PREFIX is required for x86_64 clang builds.")
+  endif()
+  add_link_options(--config "${CLANG_CONFIG_FILE}")
   add_link_options(--no-default-config)
 endif()
 
