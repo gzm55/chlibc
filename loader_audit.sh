@@ -61,7 +61,8 @@ for file in "$@"; do
 
   TARGET_ARCH=$("${READELF_BIN}" -h "$file" | sed -n '/Machine:/ s/.*Machine:[[:space:]]*// p')
   if [ "$TARGET_ARCH" = RISC-V ]; then
-    riscv64-conda-linux-gnu-objdump -d "$file" | awk '
+    OBJDUMP_BIN="${READELF_BIN%readelf}objdump"
+    "$OBJDUMP_BIN" -d "$file" | awk '
       $1 ~ /^[0-9a-f]+:/ {
         instr = $3; ofs = $1; $1=""; $2=""; $3=""; operands = $0;
         gsub(/[0-9a-f]+ <[^>]+>/, "", operands); # fix offset const operands
