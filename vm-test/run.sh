@@ -76,7 +76,7 @@ run_with_timeout_killgroup() {
   set +m
 
   wait "$qemu_pid" 2>/dev/null
-  QEMU_EXIT=$?
+  echo "$?" > "$build_dir/vm-test.exit"
   kill -9 "-$killer_pid" 2>/dev/null || true
 }
 
@@ -96,7 +96,7 @@ if grep -qF "FATAL: kernel too old" "$build_dir/vm-test.log"; then
   echo "PASS: old kernel $kernel_ver on $arch"
 elif grep -q "/sysroot/lib64/\(libdl.so\|libc.so.6\)" "$build_dir/vm-test.log"; then
   echo "PASS: kernel $kernel_ver on $arch"
-elif [ "${QEMU_EXIT:-0}" -eq 143 ] && grep -q "==== COMM ====" "$build_dir/vm-test.log"; then
+elif [ "$(cat "$build_dir/vm-test.exit" 2>/dev/null || echo 0)" -eq 143 ] && grep -q "==== COMM ====" "$build_dir/vm-test.log"; then
   echo "WARN: kernel $kernel_ver on $arch (timeout, partial success)"
 else
   echo "FAIL: kernel $kernel_ver on $arch" >&2
