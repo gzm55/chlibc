@@ -80,4 +80,6 @@ Tests download kernels and glibc RPMs into `vm-test/dl-cache/`. First run may be
 
 ## Code Audit (2025-07)
 
-All 17 issues from the 2025-07 code audit have been resolved (8 fixed, 9 WONTFIX — see git log for details).
+All 17 issues from the 2025-07 code audit resolved (8 fixed, 9 WONTFIX).
+Additional 14 issues found and resolved in follow-up audit (8 fixed, 6 WONTFIX).
+**Total: 31 issues resolved.** See git log for details.
