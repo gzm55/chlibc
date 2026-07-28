@@ -75,4 +75,6 @@ sed -i.bak "s/\(release_hash: \)\"\"/\1\"$SOURCE_HASH\"/" conda/recipe.yaml
 git add pixi.toml conda/recipe.yaml
 git commit -m "chore: bump version to $NEXT_DEV_VERSION"
 
+rm -f conda/recipe.yaml.bak
+
 echo "Release process for v$RELEASE_VERSION finished. Current: $NEXT_DEV_VERSION"
